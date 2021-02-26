@@ -1,18 +1,8 @@
-import sys
-import logging
-import structlog
 from app.run import run
+from app.utils.logger import init_logger
 
-
-def set_logger():
-    logging.basicConfig(
-        format="%(message)s", stream=sys.stdout, level=logging.INFO
-    )
-    structlog.configure(
-        logger_factory=structlog.stdlib.LoggerFactory(),
-    )
 
 
 if __name__ == '__main__':
-    set_logger()
+    init_logger()
     run()
