@@ -1,4 +1,11 @@
+# venv
 .venv/
+
+# vscode
 .vscode/
 
+# python files
 __pycache__/
+
+# windows batch files
+*.bat
