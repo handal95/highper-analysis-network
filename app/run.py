@@ -11,12 +11,22 @@ def run():
     target_dataset = "fashion_mnist"
     
     try:
-       logger.info("Step 1 >> Data Preparing")
+       logger.info("Step 1 >> Data Preparation")
        prepare_data(target_dataset)
+       logger.info(" - 1.1 : Data Collection ")
+       logger.info(" - 1.2 : Data Cleaning")
+       logger.info(" - 1.3 : Data Augmentation")
+
 
        logger.info("Step 2 >> Feature Engineering")
 
+       logger.info(" - 2.1 : Feature Selection")
+       logger.info(" - 2.2 : Feature Extraction")
+       logger.info(" - 2.3 : Feature Construction")
+
        logger.info("Step 3 >> Model Generation")
+       logger.info(" - 3.1 : Neural Architecture")
+       logger.info(" - 3.2 : Architecture optimization")
 
        logger.info("Step 4 >> Model Setting")
 
