@@ -9,27 +9,12 @@ logger = structlog.get_logger()
 
 
 def prepare_data(config):
-    default_list = [
-        'fashion_mnist'
-    ]
-
     logger.info(f" - Prepare dataset [ {config['DATASET']} ]")
 
-    if config['DATASET'] in default_list:
-        dataset = load_default_dataset(config['DATASET'])
-    else:
-        dataset = load_custom_dataset(config)
+    dataset = load_custom_dataset(config)
+    train_set, valid_set, test_set = data_label_split(config, dataset)
 
-
-def load_default_dataset(config):
-    logger.info(f" - '{config['DATASET']}' is now loading...")
-    load_dataset = {
-        "fashion_mnist" : load_fashion_mnist
-    }[target_dataset]
-
-    (train_data, train_labels), (test_data, test_labels) = load_dataset()
-    logger.info(f" - '{target_dataset}' is loaded")
-    return (train_data, train_labels), (test_data, test_labels)
+    return train_set, valid_set, test_set
 
 
 def load_custom_dataset(config):
@@ -50,13 +35,15 @@ def load_custom_dataset(config):
         else:
             train_data, valid_data = train_valid_split(config, data_path)
 
+        logger.info(f" - DATA describe \n {train_data.describe().T}")
+
     logger.info(
         f" - '{config['DATASET']}' is loaded \n"
         f" Train {len(train_data)} rows, "
         f" Valid {len(valid_data)} rows, "
         f" Test  {len(test_data)} rows"
     )
-    return train_data, valid_data, test_data
+    return (train_data, valid_data, test_data)
     
 
 def train_valid_split(config, data_path):
@@ -70,6 +57,18 @@ def train_valid_split(config, data_path):
     return train_data, valid_data
 
 
+def data_label_split(config, dataset):
+    logger.info(f" - splitting label from data [{config['TARGET_LABEL']}]")
+    (train, valid, test) = dataset
 
-def load_fashion_mnist():
-    return keras.datasets.fashion_mnist.load_data()
+    train_label = train[config['TARGET_LABEL']]
+    train_data = train.drop(columns=config['TARGET_LABEL'])
+
+    valid_label = valid[config['TARGET_LABEL']]
+    valid_data = valid.drop(columns=config['TARGET_LABEL'])
+
+    test_label = None
+    test_data = test
+
+    return (train_data, train_label), (valid_data, valid_label), (test_data, test_label)
+

@@ -13,6 +13,7 @@ def run():
         'DATASET': 'pubg-finish-placement-prediction',
         'DATASET_PATH': os.path.join('D:', 'datasets', 'pubg-finish-placement-prediction'),
         'DATASET_TYPE': 'CSV',
+        'TARGET_LABEL': 'winPlacePerc',
         'SPLIT_RATE': 0.8
     }
 
