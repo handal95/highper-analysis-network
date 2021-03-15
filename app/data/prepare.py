@@ -35,7 +35,10 @@ def load_custom_dataset(config):
         else:
             train_data, valid_data = train_valid_split(config, data_path)
 
-        logger.info(f" - DATA describe \n {train_data.describe().T}")
+        describe = train_data.describe(
+            percentiles=[.03, .25, .50, .75, .97]
+        ).T 
+        logger.info(f" - DATA describe \n{describe}")
 
     logger.info(
         f" - '{config['DATASET']}' is loaded \n"
