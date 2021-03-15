@@ -11,44 +11,35 @@ logger = structlog.get_logger()
 def prepare_data(config):
     logger.info(f" - Prepare dataset [ {config['DATASET']} ]")
 
-    dataset = load_custom_dataset(config)
-    train_set, valid_set, test_set = data_label_split(config, dataset)
+    dataset = None
+    if config['DATASET_TYPE'] == 'CSV':
+        dataset = load_csv_dataset(config)
 
-    return train_set, valid_set, test_set
+    return dataset
 
 
-def load_custom_dataset(config):
+def load_csv_dataset(config):
     logger.info(f" - '{config['DATASET']}' is now loading...")
 
-    if config['DATASET_TYPE'] == 'CSV':
-        data_path = {
-            'train': os.path.join(config['DATASET_PATH'], 'train.csv'),
-            'valid': os.path.join(config['DATASET_PATH'], 'valid.csv'),
-            'test' : os.path.join(config['DATASET_PATH'], 'test.csv'),
-            'output': os.path.join(config['DATASET_PATH'], 'output.csv')
-        }
+    data_path = {
+        'train': os.path.join(config['DATASET_PATH'], 'train.csv'),
+        'valid': os.path.join(config['DATASET_PATH'], 'valid.csv'),
+        'test' : os.path.join(config['DATASET_PATH'], 'test.csv'),
+        'output': os.path.join(config['DATASET_PATH'], 'output.csv')
+    }
 
-        test_data = pd.read_csv(data_path['test'])
-        if os.path.exists(data_path['valid']):
-            train_data = pd.read_csv(data_path['test'])
-            valid_data = pd.read_csv(data_path['test'])
-        else:
-            train_data, valid_data = train_valid_split(config, data_path)
+    test_csv = pd.read_csv(data_path['test'])
+    train_csv = pd.read_csv(data_path['train'])
+    valid_csv = pd.read_csv(data_path['valid']) if os.path.exists(data_path['valid']) else None
 
-        describe = train_data.describe(
-            percentiles=[.03, .25, .50, .75, .97]
-        ).T 
-        logger.info(f" - DATA describe \n{describe}")
+    describe = train_csv.describe(
+        percentiles=[.03, .25, .50, .75, .97]
+    ).T 
+    logger.info(f" - DATA describe \n{describe}")
 
-    logger.info(
-        f" - '{config['DATASET']}' is loaded \n"
-        f" Train {len(train_data)} rows, "
-        f" Valid {len(valid_data)} rows, "
-        f" Test  {len(test_data)} rows"
-    )
-    return (train_data, valid_data, test_data)
+    return (train_csv, valid_csv, test_csv)
     
-
+"""
 def train_valid_split(config, data_path):
     logger.info(f" - splitting valid set split_rate [{config['SPLIT_RATE']}]")
     
@@ -59,19 +50,16 @@ def train_valid_split(config, data_path):
 
     return train_data, valid_data
 
+"""
+def data_label_split(config, dataset, is_train=False):
+    try:
+        label = dataset[config['TARGET_LABEL']]
+        dataset = dataset.drop(columns=config['TARGET_LABEL'])
+    except:
+        if is_train:
+            return (dataset, None)
+        else:
+            raise
 
-def data_label_split(config, dataset):
-    logger.info(f" - splitting label from data [{config['TARGET_LABEL']}]")
-    (train, valid, test) = dataset
-
-    train_label = train[config['TARGET_LABEL']]
-    train_data = train.drop(columns=config['TARGET_LABEL'])
-
-    valid_label = valid[config['TARGET_LABEL']]
-    valid_data = valid.drop(columns=config['TARGET_LABEL'])
-
-    test_label = None
-    test_data = test
-
-    return (train_data, train_label), (valid_data, valid_label), (test_data, test_label)
-
+    return (dataset, label)
+    
