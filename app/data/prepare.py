@@ -61,15 +61,3 @@ def train_valid_split(config, data_path):
     return train_data, valid_data
 
 """
-def data_label_split(config, dataset, is_train=False):
-    try:
-        label = dataset[config['TARGET_LABEL']]
-        dataset = dataset.drop(columns=config['TARGET_LABEL'])
-    except:
-        if is_train:
-            return (dataset, None)
-        else:
-            raise
-
-    return (dataset, label)
-    

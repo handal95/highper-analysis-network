@@ -4,6 +4,7 @@ from app.exc.exc import HANException
 from app.data.prepare import prepare_data
 from app.data.clean import clean_empty_label, clean_duplicate
 from app.data.check import check_null_values, check_cardinal_values
+from app.feature.label import split_label_feature
 from app.model.model import build_model
 
 
@@ -43,6 +44,8 @@ def run():
 
         logger.info("Step 2 >> Feature Engineering")
         logger.info(" - 2.1 : Feature Selection")
+        dataset = split_label_feature(config, dataset)
+
         logger.info(" - 2.2 : Feature Extraction")
         logger.info(" - 2.3 : Feature Construction")
 
@@ -54,6 +57,7 @@ def run():
         logger.info(" - 3.2 : Architecture optimization")
 
         logger.info("Step 4 >> Model Setting")
+        logger.info(" - 4.0 : Neural Architecture")
 
         logger.info("Step 5 >> Model Evaluation")
 

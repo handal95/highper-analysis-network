@@ -70,3 +70,5 @@ def check_cardinal_values(config, dataset):
         f"\n mid cardinal cols(<{THRESH[1]}) \n {mid_cardinal_cols}"
         f"\nhigh cardinal cols(>={THRESH[1]}) \n {high_cardinal_cols}"
     )
+
+    return dataset
