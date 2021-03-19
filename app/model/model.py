@@ -39,9 +39,18 @@ def build_model(config):
             estimator=xgb_model,
             n_iter=10,
             scoring='neg_mean_squared_error',
-            verbose=1,
+            verbose=2,
             param_distributions=gbm_param_grid,
             cv=4
         )
 
     return model
+
+def fit_model(model, train):
+    (train_data, train_label) = train
+    model.fit(train_data, train_label)
+    return model
+
+def estimate_model(model):
+    print("Best RMSE :", np.sqrt(np.abs(model.best_score_)))
+    print("BestModel :", model.best_estimator_)

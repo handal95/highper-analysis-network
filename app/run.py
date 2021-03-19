@@ -6,7 +6,7 @@ from app.data.clean import clean_empty_label, clean_duplicate
 from app.data.check import check_null_values, check_cardinal_values
 from app.feature.split import split_label_feature, split_train_valid, shuffle_train_data
 from app.feature.scale import scale_feature
-from app.model.model import build_model
+from app.model.model import build_model, fit_model, estimate_model
 
 
 logger = structlog.get_logger()
@@ -50,7 +50,9 @@ def run():
         logger.info(" - 2.2 : Feature Extraction")
         logger.info(" - 2.3 : Feature Construction")
         logger.info(" - 2.4 : Feature Scaling")
-        dataset = scale_feature(config, dataset)
+        dataset = shuffle_train_data(config, dataset)
+        dataset = split_label_feature(config, dataset)
+        train, test = scale_feature(config, dataset)
 
  
         logger.info("Step 3 >> Model Generation")
@@ -61,13 +63,11 @@ def run():
 
         logger.info("Step 4 >> Model Setting")
         logger.info(" - 4.0 : Data Split")
-        dataset = shuffle_train_data(config, dataset)
-        train, test = split_label_feature(config, dataset)
         train, valid = split_train_valid(config, train)
 
         logger.info("Step 5 >> Model Evaluation")
-        train_data, train_label = train
-        model.fit(train_data, train_label)
+        model = fit_model(model, train)
+        estimate_model(model)
 
         logger.info("Step 6 >> Output")
 
