@@ -8,8 +8,17 @@ def split_label_feature(config, dataset):
     (train_data, train_label) = split_label(config, dataset['train'], 'train')
     (test_data, test_label) = split_label(config, dataset['test'], 'test')
 
-    return ((train_data, train_label), (test_data, test_label))
+    return (train_data, train_label), (test_data, test_label)
 
+
+def shuffle_train_data(config, dataset):
+    if config['DATA_SHUFFLE'] is False:
+        return dataset
+    logger.info(f"   - Shuffling train data")
+
+    dataset['train'] = dataset['train'].sample(frac=1).reset_index(drop=True) 
+    return dataset
+    
 
 def split_label(config, dataset, name):
     if dataset is None:
@@ -29,12 +38,18 @@ def split_label(config, dataset, name):
     return (dataset, label)
         
 
-def split_train_valid(config, dataset):
-    logger.info(f" - splitting valid set split_rate [{config['SPLIT_RATE']}]")
-    
-    (train, test) = dataset
-    split_idx = int(len(train) * config['SPLIT_RATE'])
-    train_data = train[:split_idx]
-    valid_data = train[split_idx:]
+def split_train_valid(config, trainset):
+    logger.info(f"   - splitting valid set split_rate [{config['SPLIT_RATE']}]")
+    train_data, train_label = trainset
 
-    return train_data, valid_data
+    total_length = len(train_data)
+    split_idx = int(total_length * config['SPLIT_RATE'])
+
+    valid_data = train_data[split_idx:]
+    valid_label = train_label[split_idx:]
+
+    train_data = train_data[:split_idx]
+    train_label = train_label[:split_idx]
+    logger.info(f"     - total ({total_length}), train ({len(train_label)}) valid ({len(valid_label)})")
+    
+    return (train_data, train_label), (valid_data, valid_label)

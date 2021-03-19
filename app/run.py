@@ -4,7 +4,7 @@ from app.exc.exc import HANException
 from app.data.prepare import prepare_data
 from app.data.clean import clean_empty_label, clean_duplicate
 from app.data.check import check_null_values, check_cardinal_values
-from app.feature.split import split_label_feature
+from app.feature.split import split_label_feature, split_train_valid, shuffle_train_data
 from app.model.model import build_model
 
 
@@ -20,10 +20,11 @@ def run():
         'DATASET_TYPE': 'CSV',
         'INDEX_LABEL': 'Id',
         'TARGET_LABEL': 'SalePrice',
-        'SPLIT_RATE': 0.8,
         'CLEAN_EMPTY_LABEL': True,
         'CLEAN_DUPLICATE': True,
         'CARDINAL_THRESHOLD': [6, 9],
+        'SPLIT_RATE': 0.8,
+        'DATA_SHUFFLE': True,
         'MODEL': 'CatBoost'
     }
 
@@ -44,7 +45,6 @@ def run():
 
         logger.info("Step 2 >> Feature Engineering")
         logger.info(" - 2.1 : Feature Selection")
-        dataset = split_label_feature(config, dataset)
 
         logger.info(" - 2.2 : Feature Extraction")
         logger.info(" - 2.3 : Feature Construction")
@@ -57,7 +57,10 @@ def run():
         logger.info(" - 3.2 : Architecture optimization")
 
         logger.info("Step 4 >> Model Setting")
-        logger.info(" - 4.0 : Neural Architecture")
+        logger.info(" - 4.0 : Data Split")
+        dataset = shuffle_train_data(config, dataset)
+        train, test = split_label_feature(config, dataset)
+        train, valid = split_train_valid(config, train)
 
         logger.info("Step 5 >> Model Evaluation")
 
