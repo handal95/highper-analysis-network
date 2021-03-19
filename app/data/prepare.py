@@ -1,6 +1,7 @@
 import os
 import structlog
 import pandas as pd
+import numpy as np
 from tensorflow import keras
 
 
@@ -15,30 +16,40 @@ def prepare_data(config):
     if config['DATASET_TYPE'] == 'CSV':
         dataset = load_csv_dataset(config)
 
+    (train, valid, test) = dataset
+    describe_data(train)
+
     return dataset
 
 
 def load_csv_dataset(config):
     logger.info(f" - '{config['DATASET']}' is now loading...")
 
-    data_path = {
-        'train': os.path.join(config['DATASET_PATH'], 'train.csv'),
-        'valid': os.path.join(config['DATASET_PATH'], 'valid.csv'),
-        'test' : os.path.join(config['DATASET_PATH'], 'test.csv'),
-        'output': os.path.join(config['DATASET_PATH'], 'output.csv')
-    }
-
-    test_csv = pd.read_csv(data_path['test'])
-    train_csv = pd.read_csv(data_path['train'])
-    valid_csv = pd.read_csv(data_path['valid']) if os.path.exists(data_path['valid']) else None
-
-    describe = train_csv.describe(
-        percentiles=[.03, .25, .50, .75, .97]
-    ).T 
-    logger.info(f" - DATA describe \n{describe}")
+    test_csv = read_csv(config, 'test')
+    train_csv = read_csv(config, 'train')
+    valid_csv = read_csv(config, 'valid')
+    output_csv = read_csv(config, 'output')
 
     return (train_csv, valid_csv, test_csv)
-    
+
+
+def read_csv(config, category):
+    file_path = os.path.join(config['DATASET_PATH'], f"{category}.csv")
+    try:
+        csv_file = pd.read_csv(file_path, index_col = config['INDEX_LABEL'])
+        csv_file.describe()
+        logger.info(f"   - {category:5} shape : {csv_file.shape}")
+        return csv_file
+    except FileNotFoundError:
+        return None
+
+
+def describe_data(data):
+    data.info()
+    describe = data.describe(percentiles=[.03, .25, .50, .75, .97]).T
+    logger.info(f" - DATA describe \n{describe}")
+
+
 """
 def train_valid_split(config, data_path):
     logger.info(f" - splitting valid set split_rate [{config['SPLIT_RATE']}]")
