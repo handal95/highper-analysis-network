@@ -25,7 +25,7 @@ def run():
         'CARDINAL_THRESHOLD': [6, 9],
         'SPLIT_RATE': 0.8,
         'DATA_SHUFFLE': True,
-        'MODEL': 'CatBoost'
+        'MODEL': 'XGBoost'
     }
 
     try:
@@ -52,7 +52,7 @@ def run():
  
         logger.info("Step 3 >> Model Generation")
         logger.info(" - 3.1 : Neural Architecture")
-        # model = build_model(config)
+        model = build_model(config)
 
         logger.info(" - 3.2 : Architecture optimization")
 

@@ -27,6 +27,7 @@ def load_csv_dataset(config, dataset):
     dataset['train'] = read_csv(config, 'train')
     dataset['test'] = read_csv(config, 'test')
     dataset['valid'] = read_csv(config, 'valid')
+    dataset['train'] = pd.concat([dataset['train'], dataset['valid']], axis=0)
 
     return dataset
 
