@@ -12,25 +12,23 @@ logger = structlog.get_logger()
 def prepare_data(config):
     logger.info(f" - Prepare dataset [ {config['DATASET']} ]")
 
-    dataset = None
+    dataset = {'train': None, 'valid': None,'test': None}
     if config['DATASET_TYPE'] == 'CSV':
-        dataset = load_csv_dataset(config)
+        dataset = load_csv_dataset(config, dataset)
 
-    (train, valid, test) = dataset
-    describe_data(train)
+    describe_data(dataset['train'])
 
     return dataset
 
 
-def load_csv_dataset(config):
+def load_csv_dataset(config, dataset):
     logger.info(f" - '{config['DATASET']}' is now loading...")
 
-    test_csv = read_csv(config, 'test')
-    train_csv = read_csv(config, 'train')
-    valid_csv = read_csv(config, 'valid')
-    output_csv = read_csv(config, 'output')
+    dataset['train'] = read_csv(config, 'train')
+    dataset['test'] = read_csv(config, 'test')
+    dataset['valid'] = read_csv(config, 'valid')
 
-    return (train_csv, valid_csv, test_csv)
+    return dataset
 
 
 def read_csv(config, category):
@@ -47,17 +45,3 @@ def read_csv(config, category):
 def describe_data(data):
     describe = data.describe(percentiles=[.03, .25, .50, .75, .97]).T
     logger.info(f" - DATA describe \n{describe}")
-
-
-"""
-def train_valid_split(config, data_path):
-    logger.info(f" - splitting valid set split_rate [{config['SPLIT_RATE']}]")
-    
-    train = pd.read_csv(data_path['train'])
-    split_idx = int(len(train) * config['SPLIT_RATE'])
-    train_data = train[:split_idx]
-    valid_data = train[split_idx:]
-
-    return train_data, valid_data
-
-"""

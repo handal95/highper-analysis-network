@@ -4,7 +4,7 @@ from app.exc.exc import HANException
 from app.data.prepare import prepare_data
 from app.data.clean import clean_empty_label, clean_duplicate
 from app.data.check import check_null_values, check_cardinal_values
-from app.feature.label import split_label_feature
+from app.feature.split import split_label_feature
 from app.model.model import build_model
 
 

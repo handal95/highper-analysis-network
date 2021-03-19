@@ -10,10 +10,9 @@ def clean_empty_label(config, dataset):
         return dataset
     
     logger.info(f" - Empty labled data Cleaning...")
-    (train_data, valid_data, test_data) = dataset
 
-    train_data = remove_empty_label(config, train_data, 'train data')
-    valid_data = remove_empty_label(config, valid_data, 'valid data')
+    train_data = remove_empty_label(config, dataset['train'], 'train data')
+    test_data = remove_empty_label(config, dataset['test'], 'test data')
     
     return dataset
 
@@ -24,13 +23,11 @@ def clean_duplicate(config, dataset):
         return dataset
 
     logger.info(f" - Duplicate data Cleaning...")
-    (train_data, valid_data, test_data) = dataset
 
-    train_data = remove_duplicate(train_data, 'train data')
-    valid_data = remove_duplicate(valid_data, 'valid data')
-    test_data = remove_duplicate(test_data, 'test data')
+    train_data = remove_duplicate(dataset['train'], 'train data')
+    test_data = remove_duplicate(dataset['test'], 'test data')
 
-    return (train_data, valid_data, test_data)
+    return dataset
 
 
 def remove_duplicate(dataset, name):
@@ -50,11 +47,14 @@ def remove_empty_label(config, dataset, name):
     if dataset is None:
         return None
 
-    raw_length = len(dataset)
-    dataset = dataset[dataset['SalePrice'] != None]
-    removed_lines = len(dataset) - raw_length
+    try:
+        raw_length = len(dataset)
+        dataset = dataset[dataset[config['TARGET_LABEL']] != None]
+        removed_lines = len(dataset) - raw_length
 
-    cleaning_log('empty labeled data', name, removed_lines)
+        cleaning_log('empty labeled data', name, removed_lines)
+    except KeyError:
+        pass
 
     return dataset
 
