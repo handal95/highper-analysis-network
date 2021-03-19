@@ -3,6 +3,7 @@ import structlog
 from app.exc.exc import HANException
 from app.data.prepare import prepare_data
 from app.data.clean import clean_empty_label, clean_duplicate
+from app.data.check import check_null_values
 from app.model.model import build_model
 
 
@@ -30,8 +31,11 @@ def run():
         dataset = prepare_data(config)
 
         logger.info(" - 1.2 : Data Cleaning")
-        dataset = clean_empty_label(config, dataset)
         dataset = clean_duplicate(config, dataset)
+        dataset = clean_empty_label(config, dataset)
+
+        logger.info(" - 1.3 : Data Check")
+        dataset = check_null_values(config, dataset)
 
         logger.info(" - 1.3 : Data Augmentation")
 
