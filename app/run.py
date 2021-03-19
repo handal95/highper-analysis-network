@@ -63,6 +63,8 @@ def run():
         train, valid = split_train_valid(config, train)
 
         logger.info("Step 5 >> Model Evaluation")
+        train_data, train_label = train
+        model.fit(train_data, train_label)
 
         logger.info("Step 6 >> Output")
 
