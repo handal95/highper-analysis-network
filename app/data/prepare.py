@@ -45,7 +45,6 @@ def read_csv(config, category):
 
 
 def describe_data(data):
-    data.info()
     describe = data.describe(percentiles=[.03, .25, .50, .75, .97]).T
     logger.info(f" - DATA describe \n{describe}")
 

@@ -2,7 +2,7 @@ import os
 import structlog
 from app.exc.exc import HANException
 from app.data.prepare import prepare_data
-from app.data.clean import clean_data, clean_duplicate
+from app.data.clean import clean_empty_label, clean_duplicate
 from app.model.model import build_model
 
 
@@ -17,8 +17,9 @@ def run():
         'DATASET_PATH': os.path.join('D:', 'datasets', DATASET),
         'DATASET_TYPE': 'CSV',
         'INDEX_LABEL': 'Id',
-        'TARGET_LABEL': 'winPlacePerc',
+        'TARGET_LABEL': 'SalePrice',
         'SPLIT_RATE': 0.8,
+        'CLEAN_EMPTY_LABEL': True,
         'CLEAN_DUPLICATE': True,
         'MODEL': 'CatBoost'
     }
@@ -29,6 +30,7 @@ def run():
         dataset = prepare_data(config)
 
         logger.info(" - 1.2 : Data Cleaning")
+        dataset = clean_empty_label(config, dataset)
         dataset = clean_duplicate(config, dataset)
 
         logger.info(" - 1.3 : Data Augmentation")
