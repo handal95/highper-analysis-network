@@ -3,7 +3,7 @@ import structlog
 from app.exc.exc import HANException
 from app.data.prepare import prepare_data
 from app.data.clean import clean_empty_label, clean_duplicate
-from app.data.check import check_null_values
+from app.data.check import check_null_values, check_cardinal_values
 from app.model.model import build_model
 
 
@@ -22,6 +22,7 @@ def run():
         'SPLIT_RATE': 0.8,
         'CLEAN_EMPTY_LABEL': True,
         'CLEAN_DUPLICATE': True,
+        'CARDINAL_THRESHOLD': [6, 9],
         'MODEL': 'CatBoost'
     }
 
@@ -36,6 +37,7 @@ def run():
 
         logger.info(" - 1.3 : Data Check")
         dataset = check_null_values(config, dataset)
+        dataset = check_cardinal_values(config, dataset)
 
         logger.info(" - 1.3 : Data Augmentation")
 
