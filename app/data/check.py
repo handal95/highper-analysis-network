@@ -45,7 +45,7 @@ def check_cardinal_values(config, dataset):
     cat_features = list()
     num_features = list()
     for col in dataset['train'].columns:
-        if dataset['train'][col].dtype == 'object':
+        if (dataset['train'][col].dtype == 'object') and (col != config['TARGET_LABEL']):
             cat_features.append(col)
         else:
             num_features.append(col)
@@ -62,11 +62,16 @@ def check_cardinal_values(config, dataset):
             mid_cardinal_cols.append(col)
         else:
             high_cardinal_cols.append(col)
-    
+
+    dataset['train'] = dataset['train'].drop(cat_features, axis=1)
+    dataset['test'] = dataset['test'].drop(cat_features, axis=1)
+        
     logger.info(
         f"\n low cardinal cols(<{THRESH[0]}) \n {low_cardinal_cols}"
         f"\n mid cardinal cols(<{THRESH[1]}) \n {mid_cardinal_cols}"
         f"\nhigh cardinal cols(>={THRESH[1]}) \n {high_cardinal_cols}"
     )
 
+    print(dataset['train'].head(10).T)
+    print(dataset['train'].columns)
     return dataset

@@ -8,8 +8,9 @@ def scale_feature(config, dataset):
     logger.info(f"   - Scaling data")
 
     Scaler = StandardScaler()
+    (train_data, train_label), (test_data, test_label) = dataset
 
-    dataset['train'] = pd.DataFrame(Scaler.fit_transform(dataset['train']))
-    dataset['test'] = pd.DataFrame(Scaler.fit_transform(dataset['test']))
+    train_data = pd.DataFrame(Scaler.fit_transform(train_data))
+    test_data = pd.DataFrame(Scaler.fit_transform(test_data))
 
-    return dataset
+    return (train_data, train_label), (test_data, test_label)

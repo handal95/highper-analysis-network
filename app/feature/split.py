@@ -16,7 +16,7 @@ def shuffle_train_data(config, dataset):
         return dataset
     logger.info(f"   - Shuffling train data")
 
-    dataset['train'] = dataset['train'].sample(frac=1).reset_index(drop=True) 
+    dataset['train'] = dataset['train'].sample(frac=1).reset_index(drop=True)
     return dataset
     
 
@@ -26,16 +26,15 @@ def split_label(config, dataset, name):
 
     try:
         label = dataset[config['TARGET_LABEL']]
-        dataset = dataset.drop(columns=config['TARGET_LABEL'])
+        data = dataset.drop(columns=config['TARGET_LABEL'])
         logger.info(f"        {name:5} Label shape {label.shape}, Dataset shape {dataset.shape}")
+        return (data, label)
     except:
         if name == 'test':
             logger.info(f"        {name:5} doesn't have [{config['TARGET_LABEL']}] label column")
             return (dataset, None)
         else:
             raise
-
-    return (dataset, label)
         
 
 def split_train_valid(config, trainset):
