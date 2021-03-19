@@ -5,6 +5,7 @@ from app.data.prepare import prepare_data
 from app.data.clean import clean_empty_label, clean_duplicate
 from app.data.check import check_null_values, check_cardinal_values
 from app.feature.split import split_label_feature, split_train_valid, shuffle_train_data
+from app.feature.scale import scale_feature
 from app.model.model import build_model
 
 
@@ -48,6 +49,8 @@ def run():
 
         logger.info(" - 2.2 : Feature Extraction")
         logger.info(" - 2.3 : Feature Construction")
+        logger.info(" - 2.4 : Feature Scaling")
+        dataset = scale_feature(config, dataset)
 
  
         logger.info("Step 3 >> Model Generation")
