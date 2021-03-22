@@ -50,28 +50,27 @@ def check_cardinal_values(config, dataset):
         else:
             num_features.append(col)
 
-    low_cardinal_cols = list()
-    mid_cardinal_cols = list()
-    high_cardinal_cols = list()
+    low_card_cols = list()
+    mid_card_cols = list()
+    high_card_cols = list()
 
     for col in cat_features:
         col_unique = dataset['train'][col].nunique()
         if col_unique < THRESH[0]:
-            low_cardinal_cols.append(col)
+            low_card_cols.append(col)
         elif col_unique < THRESH[1]:
-            mid_cardinal_cols.append(col)
+            mid_card_cols.append(col)
         else:
-            high_cardinal_cols.append(col)
+            high_card_cols.append(col)
 
-    dataset['train'] = dataset['train'].drop(cat_features, axis=1)
-    dataset['test'] = dataset['test'].drop(cat_features, axis=1)
+    # dataset['train'] = dataset['train'].drop(cat_features, axis=1)
+    # dataset['test'] = dataset['test'].drop(cat_features, axis=1)
         
     logger.info(
-        f"\n low cardinal cols(<{THRESH[0]}) \n {low_cardinal_cols}"
-        f"\n mid cardinal cols(<{THRESH[1]}) \n {mid_cardinal_cols}"
-        f"\nhigh cardinal cols(>={THRESH[1]}) \n {high_cardinal_cols}"
+        f"\n low cardinal cols(<{THRESH[0]}) #{len(low_card_cols)}\n {low_card_cols}"
+        f"\n mid cardinal cols(<{THRESH[1]}) #{len(mid_card_cols)}\n {mid_card_cols}"
+        f"\nhigh cardinal cols(>={THRESH[1]}) #{len(high_card_cols)}\n {high_card_cols}"
     )
 
     print(dataset['train'].head(10).T)
-    print(dataset['train'].columns)
     return dataset
