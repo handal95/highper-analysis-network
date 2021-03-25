@@ -21,12 +21,19 @@ def build_model(config):
         )
     elif config['MODEL'] == 'XGBoost':
         xgb_model = XGBRegressor(
-            learning_rate=0.1,
-            n_estimators=100,
-            reg_alpha=0.001,
-            reg_lambda=0.000001,
-            n_jobs=-1,
-            min_child_weight=3
+            colsample_bylevel=0.9229733609038979,
+            colsample_bynode=0.21481791874780318,
+            colsample_bytree=0.607964318297635, 
+            gamma=0.8989889254961725,
+            learning_rate=0.009192310189734834,
+            max_depth=3,
+            n_estimators=3602, 
+            reg_alpha=3.185674564163364e-12,
+            reg_lambda=4.95553539265423e-13,
+            seed=18,
+            subsample=0.8381904293270576,
+#            tree_method='gpu_hist',
+            verbosity=1
         )
 
         gbm_param_grid = {
@@ -53,4 +60,5 @@ def fit_model(model, train):
 
 def estimate_model(model):
     print("Best RMSE :", np.sqrt(np.abs(model.best_score_)))
-    print("BestModel :", model.best_estimator_)
+    print("Best RMSLE :", np.log(np.sqrt(np.abs(model.best_score_))))
+    print("BestModel  :", model.best_estimator_)
