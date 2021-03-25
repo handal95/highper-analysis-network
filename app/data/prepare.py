@@ -14,35 +14,36 @@ def prepare_data(config):
 
     dataset = {'train': None, 'valid': None,'test': None}
     if config['DATASET_TYPE'] == 'CSV':
-        dataset = load_csv_dataset(config, dataset)
+        csvfile = load_csv_dataset(config, dataset)
+        dataset = pd.concat(csvfile, axis=0)
 
-    describe_data(dataset['train'])
+    describe_data(dataset)
 
     return dataset
 
 
 def load_csv_dataset(config, dataset):
-    logger.info(f" - '{config['DATASET']}' is now loading...")
+    logger.info(f" - '{config['DATASET']}.csv' is now loading...")
 
-    dataset['train'] = read_csv(config, 'train')
-    dataset['test'] = read_csv(config, 'test')
-    dataset['valid'] = read_csv(config, 'valid')
-    dataset['train'] = pd.concat([dataset['train'], dataset['valid']], axis=0)
+    train_set = read_csv(config, 'train')
+    test_set = read_csv(config, 'test')
+    valid_set = read_csv(config, 'valid')
 
-    return dataset
-
+    return [train_set, test_set, valid_set]
+    
 
 def read_csv(config, category):
     file_path = os.path.join(config['DATASET_PATH'], f"{category}.csv")
     try:
-        csv_file = pd.read_csv(file_path, index_col = config['INDEX_LABEL'])
-        csv_file.describe()
+        csv_file = pd.read_csv(file_path, index_col = config['INDEX_LABEL'])            
+        csv_file["_SET_"] = category
         logger.info(f"   - {category:5} shape : {csv_file.shape}")
+
         return csv_file
     except FileNotFoundError:
         return None
 
 
-def describe_data(data):
-    describe = data.describe(percentiles=[.03, .25, .50, .75, .97]).T
-    logger.info(f" - DATA describe \n{describe}")
+def describe_data(dataset):
+    describe = dataset.describe(percentiles=[.03, .25, .50, .75, .97]).T
+    logger.info(f" - DATA describe, len: {len(dataset)} \n{describe}")
