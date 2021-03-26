@@ -74,7 +74,7 @@ def run():
         train, valid = split_train_valid(config, dataset)
 
         logger.info("Step 5 >> Model Evaluation")
-        model = fit_model(model, train)
+        model = fit_model(model, train, valid)
 
         logger.info("Step 6 >> Output")
         estimate_model(model)
