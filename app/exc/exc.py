@@ -7,3 +7,7 @@ class HANException(Exception):
             return 'MyCustomError, {0}'.format(self.message)
         else:
             return 'MyCustomError has been raised'
+
+class QuitException(HANException):
+    def __init__(self, *args):
+        self.message = args[0] if args else None

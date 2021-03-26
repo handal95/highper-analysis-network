@@ -41,9 +41,10 @@ def build_model(config):
 
     return models
 
-def fit_model(models, train, valid):
-    (train_data, train_label) = train
-    (valid_data, valid_label) = valid
+def fit_model(models, dataset):
+    
+    (train_data, train_label), test = dataset
+    # (valid_data, valid_label) = valid
 
     predicts = dict()
     models["Lasso"].fit(train_data, train_label)

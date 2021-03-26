@@ -1,9 +1,10 @@
 import os
 import structlog
-from app.exc.exc import HANException
+from app.exc.exc import HANException, QuitException
 from app.data.prepare import prepare_data
+from app.data.analyze import analize_dataset
 from app.data.clean import clean_empty_label, clean_duplicate, clean_null_column
-from app.data.check import check_cardinal_values, check_skewness_kurtosis
+from app.data.check import check_cardinal_values, check_skewness_kurtosis, check_data
 from app.feature.split import split_label_feature, split_train_valid, shuffle_train_data
 from app.feature.select import select_feature
 from app.feature.encoding import one_hot_encoding
@@ -20,9 +21,10 @@ def run():
     config = {
         'DATASET': DATASET,
         'DATASET_PATH': os.path.join('D:', 'datasets', DATASET),
+        'DESCRIPT_PATH': os.path.join('D:', 'datasets', DATASET, 'description.txt'),
         'DATASET_TYPE': 'CSV',
         'INDEX_LABEL': 'Id',
-        'TARGET_LABEL': 'SalePrice',
+        'TARGET_LABEL': ['SalePrice'],
         'CLEAN_EMPTY_LABEL': True,
         'CLEAN_DUPLICATE': True,
         'CLEAN_NULL_THRESHOLD': 0.5,
@@ -36,6 +38,7 @@ def run():
         logger.info("Step 1 >> Data Preparation")
         logger.info(" - 1.1 : Data Collection ")
         dataset = prepare_data(config)
+        dataset = analize_dataset(config, dataset)
 
         logger.info(" - 1.2 : Data Cleaning")
         dataset = clean_duplicate(config, dataset)
@@ -45,6 +48,8 @@ def run():
         logger.info(" - 1.3 : Data Check")
         dataset = check_cardinal_values(config, dataset)
         dataset = check_skewness_kurtosis(config, dataset)
+        input()
+
         logger.info(" - 1.3 : Data Augmentation")
 
         logger.info("Step 2 >> Feature Engineering")
@@ -71,14 +76,21 @@ def run():
 
         logger.info("Step 4 >> Model Setting")
         logger.info(" - 4.0 : Data Split")
-        train, valid = split_train_valid(config, dataset)
+        # train, valid = split_train_valid(config, dataset)
 
         logger.info("Step 5 >> Model Evaluation")
-        model = fit_model(model, train, valid)
+        model = fit_model(model, dataset)
 
         logger.info("Step 6 >> Output")
         estimate_model(model)
 
+
+    except QuitException:
+        logger.warn(f'Quit!')
+        return
+    except KeyboardInterrupt:
+        logger.warn(f'Abort!')
+        return
     except HANException as e:
         logger.warn(f"Custom Exception raised : {e.message}")
         return
