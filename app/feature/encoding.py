@@ -11,9 +11,8 @@ def one_hot_encoding(config, dataset):
     Scaler = StandardScaler()
     imputer = SimpleImputer(strategy='mean')
 
-    dataset_type = dataset["_SET_"]
     dataset_label = dataset[config["TARGET_LABEL"]]
-    dataset = dataset.drop(columns=["_SET_", config["TARGET_LABEL"]])
+    dataset = dataset.drop(columns=config["TARGET_LABEL"])
 
     category_cols = dataset.select_dtypes(include='object')
     category_nums = dataset.select_dtypes(exclude='object')
@@ -23,10 +22,10 @@ def one_hot_encoding(config, dataset):
     category_nums = pd.DataFrame(imputer.fit_transform(category_nums))
     print(category_nums[:20])
 
-    # category_nums = pd.DataFrame(Scaler.fit_transform(category_nums))
-    # imputer.fit(category_nums)
+    category_nums = pd.DataFrame(Scaler.fit_transform(category_nums))
+    imputer.fit(category_nums)
     
     dataset = pd.merge(category_nums, category_dums, left_index=True, right_index=True)
-    dataset = pd.concat([dataset, dataset_type, dataset_label], axis=1)
+    dataset = pd.concat([dataset, dataset_label], axis=1)
 
     return dataset

@@ -6,12 +6,9 @@ logger = structlog.get_logger()
 
 def split_label_feature(config, dataset):
     logger.info(f"   - Splitting target label")
-
-    train_set = dataset[dataset["_SET_"] == "train"].drop(columns="_SET_")
-    test_set = dataset[dataset["_SET_"] == "test"].drop(columns="_SET_")
-    
-    (train_data, train_label) = split_label(config, train_set, 'train')
-    (test_data, test_label) = split_label(config, test_set, 'test')
+   
+    (train_data, train_label) = split_label(config, dataset['train'], 'train')
+    (test_data, test_label) = split_label(config, dataset['test'], 'test')
     return (train_data, train_label), (test_data, test_label)
 
 

@@ -11,9 +11,9 @@ def clean_duplicate(config, dataset):
         logger.info(f" - Skipping Duplicate data Cleaning...")
         return dataset
 
-    raw_length = len(dataset)
-    dataset = dataset.drop_duplicates()
-    removed_lines = len(dataset) - raw_length
+    raw_length = len(dataset['train'])
+    dataset['train'] = dataset['train'].drop_duplicates()
+    removed_lines = len(dataset['train']) - raw_length
 
     logger.info(f"    - Cleaning Duplicated data, {removed_lines} removed")
 

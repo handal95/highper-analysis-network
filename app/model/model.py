@@ -42,11 +42,13 @@ def build_model(config):
     return models
 
 def fit_model(models, dataset):
-    
+   
     (train_data, train_label), test = dataset
-    # (valid_data, valid_label) = valid
 
+    train_data = train_data[:-1]
+    train_label = train_label[:-1]
     predicts = dict()
+
     models["Lasso"].fit(train_data, train_label)
     models["ENet"].fit(train_data, train_label)
     models["GBoost"].fit(train_data, train_label)

@@ -61,7 +61,7 @@ def check_cardinal_values(config, dataset):
     logger.info(f" - Check Cardinal value data...")
     THRESH = config['CARDINAL_THRESHOLD']
 
-    cat_features = dataset.select_dtypes(include='object').drop(columns=["_SET_"])
+    cat_features = dataset.select_dtypes(include='object')
     num_features = dataset.select_dtypes(exclude='object')
 
     card_info_data = []

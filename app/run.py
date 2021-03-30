@@ -2,7 +2,7 @@ import os
 import structlog
 from app.exc.exc import HANException, QuitException
 from app.data.prepare import prepare_data
-from app.data.analyze import analize_dataset
+from app.data.analyze import analize_dataset, analize_feature
 from app.data.clean import clean_empty_label, clean_duplicate, clean_null_column
 from app.data.check import check_cardinal_values, check_skewness_kurtosis, check_data
 from app.feature.split import split_label_feature, split_train_valid, shuffle_train_data
@@ -31,7 +31,12 @@ def run():
         'CARDINAL_THRESHOLD': [5, 9],
         'SPLIT_RATE': 0.8,
         'DATA_SHUFFLE': True,
-        'MODEL': 'XGBoost'
+        'MODEL': 'XGBoost',
+        'options': {
+            'FIX_COLUMN_INFO': True
+        },
+        'info': None,
+        'meta': dict(),
     }
 
     try:
@@ -39,23 +44,23 @@ def run():
         logger.info(" - 1.1 : Data Collection ")
         dataset = prepare_data(config)
         dataset = analize_dataset(config, dataset)
+        dataset = analize_feature(config, dataset)
 
         logger.info(" - 1.2 : Data Cleaning")
-        dataset = clean_duplicate(config, dataset)
-        dataset = clean_empty_label(config, dataset)
-        dataset = clean_null_column(config, dataset)
+        # dataset = clean_duplicate(config, dataset)
+        # dataset = clean_empty_label(config, dataset)
+        dataset['train'] = clean_null_column(config, dataset['train'])
 
         logger.info(" - 1.3 : Data Check")
-        dataset = check_cardinal_values(config, dataset)
-        dataset = check_skewness_kurtosis(config, dataset)
-        input()
+        dataset['train'] = check_cardinal_values(config, dataset['train'])
+        dataset['train'] = check_skewness_kurtosis(config, dataset['train'])
 
         logger.info(" - 1.3 : Data Augmentation")
 
         logger.info("Step 2 >> Feature Engineering")
         logger.info(" - 2.1 : Feature Selection")
-        dataset = select_feature(config, dataset)
-        dataset = one_hot_encoding(config, dataset)
+        dataset['train'] = select_feature(config, dataset['train'])
+        dataset['train'] = one_hot_encoding(config, dataset['train'])
         # dataset = check_cardinal_values(config, dataset)
 
         logger.info(" - 2.2 : Feature Extraction")
@@ -63,7 +68,7 @@ def run():
         logger.info(" - 2.4 : Feature Scaling")
 
         dataset = split_label_feature(config, dataset)
-        # dataset = scale_feature(config, dataset)
+        dataset = scale_feature(config, dataset)
 
         # dataset = shuffle_train_data(config, dataset)
 
