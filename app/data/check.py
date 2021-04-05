@@ -1,19 +1,19 @@
-import structlog
 import pandas as pd
 import numpy as np
+from app.utils.logger import Logger
 
-logger = structlog.get_logger()
+logger = Logger()
 
 
 def check_data(config, dataset):
-    logger.info(f" - 1.1.+ : Check Data Collection")
+    logger.log(f" - 1.1.+ : Check Data Collection")
     
-    logger.info(f"   - 1.1.1 : Check Columns ")
+    logger.log(f"   - 1.1.1 : Check Columns ")
     train_cols = dataset['train'].columns
     test_cols = dataset['train'].columns
 
 #    union_cols = train_cols.union(test_cols)
-#    logger.info(f"   - Total columns ({len(union_cols)}) : \n List \n {union_cols.values} ")
+#    logger.log(f"   - Total columns ({len(union_cols)}) : \n List \n {union_cols.values} ")
     
     col_info = []
     pd.set_option('display.max_rows', None)
@@ -39,26 +39,26 @@ def check_data(config, dataset):
         col_info.append(info)
 
     data_frame = pd.DataFrame(col_info, index=None).sort_values(by=f'NA (%)', ascending=False)
-    logger.info(f"\n{data_frame}")
+    logger.log(f"\n{data_frame}")
 
 #    describe = dataset['train'].describe(percentiles=[.03, .25, .50, .75, .97]).T
-#    logger.info(f" - DATA describe, len: {len(dataset['train'])} \n{describe}")
+#    logger.log(f" - DATA describe, len: {len(dataset['train'])} \n{describe}")
 
 
-    # logger.info(f"   - Inferred the target column")
+    # logger.log(f"   - Inferred the target column")
     # infered_target = dataset['train'].columns.difference(dataset['test'].columns).values
-    # logger.info(f" Infered : {infered_target} ( Y / n )")
+    # logger.log(f" Infered : {infered_target} ( Y / n )")
     # answer = str(input()).capitalize()
     
     # if answer is None or answer == 'Y':
-    #     logger.info("GOOD")
+    #     logger.log("GOOD")
     # else:
-    #     logger.info("WHAT IS ACTUAL TARGET VALUE ? ")
+    #     logger.log("WHAT IS ACTUAL TARGET VALUE ? ")
         
     return dataset
     
 def check_cardinal_values(config, dataset):
-    logger.info(f" - Check Cardinal value data...")
+    logger.log(f" - Check Cardinal value data...")
     THRESH = config['CARDINAL_THRESHOLD']
 
     cat_features = dataset.select_dtypes(include='object')
@@ -84,13 +84,13 @@ def check_cardinal_values(config, dataset):
         card_info_data.append(card_info)
 
     data_frame = pd.DataFrame(card_info_data, index=None).sort_values(by=f'nunique', ascending=False)
-    logger.info(f"\n{data_frame}")
+    logger.log(f"\n{data_frame}")
 
     return dataset
 
 
 def check_skewness_kurtosis(config, dataset):
-    logger.info(f" - Check Numeric value data...")
+    logger.log(f" - Check Numeric value data...")
 
     num_features = dataset.select_dtypes(exclude='object')
     log_dataset = np.log1p(num_features)
@@ -115,6 +115,6 @@ def check_skewness_kurtosis(config, dataset):
         info_data.append(info)
 
     data_frame = pd.DataFrame(info_data, index=None).sort_values(by=f'Features', ascending=False)
-    logger.info(f"\n{data_frame}")
+    logger.log(f"\n{data_frame}")
 
     return dataset

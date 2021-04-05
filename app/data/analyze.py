@@ -1,63 +1,19 @@
-import pandas as pd
+import os
 import numpy as np
+import pandas as pd
 from app.utils.logger import Logger
 from app.utils.command import request_user_input
 
 logger = Logger()
 
 
-def analize_dataset(config, dataset):
-    logger.log("- 1.1.+ : Check Data Collection", level=2)
-    
-    logger.log("- 1.1.1 : Check Columns ", level=3)
-    train_cols = dataset['train'].columns
-    test_cols = dataset['test'].columns
-
-    diff_cols = train_cols.difference(test_cols)
-    union_cols = train_cols.union(test_cols)
-    
-    col_info = []
-    pd.set_option('display.max_rows', None)
-    dtype_dict = {
-        'int64': 'Num.',
-        'float64': 'Num.',
-        'object': 'Cat.',
-    }
-
-    for col in train_cols:
-        dtype = dataset['train'][col].dtype.name
-        na_count = dataset['train'][col].isna().sum()
-        na_percent = np.round((100 * (na_count)/len(dataset['train'])), 2)
-        col_unique = dataset['train'][col].nunique()
-
-        info = {
-            'col': col,
-            'dType': dtype_dict[dtype],
-            'nunique': col_unique,
-            'NA (count)': na_count if na_count > 0 else 0,
-            'NA (%)': f"{na_percent:4.2f}" if na_percent else " ",
-            'Sample1': dataset['train'][col][1],
-            'Sample2': dataset['train'][col][2],
-            'Sample3': dataset['train'][col][3],
-        }
-        
-        col_info.append(info)
-
-    data_frame = pd.DataFrame(col_info, index=None)
-    #.sort_values(by='NA (count)', ascending=False)
-    description = load_description(config)
-    if description is not None:
-        data_frame = data_frame.merge(description, how='left', on='col')
-    
-    config['info'] = data_frame.reindex(
-        columns=['col', 'Description', 'dType', 'Sample1', 'Sample2', 'Sample3', 'nunique', 'NA (count)', 'NA (%)'])
-    
+def analize_dataset(config, dataset, metaset):
+    logger.log("- 1.2 : Analize Data", level=2)
+      
     logger.log(
         f"DATASET Analysis \n"
-        f"  Total Train dataset : {len(dataset['train'])}  - "
-        f"Inferred Target label : {diff_cols.values} \n"
-        f"{config['info']}",
-        level=4
+        f"  Total Train dataset : {metaset['__nrows__']['train']}  - "
+        f"Inferred Target label : {metaset['__target__']} \n"
     )
 
     config['options']['FIX_COLUMN_INFO'] = request_user_input(
@@ -69,10 +25,11 @@ def analize_dataset(config, dataset):
 
 
 def load_description(config):
-    desc_path = config["DESCRIPT_PATH"]
+    desc_path = config.get("DESCRIPT_PATH")
     if desc_path is None:
         return None
 
+    file_path = os.path.join(config['DATASET_PATH'], desc_path)
     try:
         with open(desc_path, "r", newline="\r\n") as desc_file:
             desc_list = desc_file.read().splitlines()
@@ -93,7 +50,7 @@ def load_description(config):
             return data_frame
 
     except FileNotFoundError as e:
-        logger.info(f"      Description File Not Found Error, '{desc_path}'")
+        logger.log(f"      Description File Not Found Error, '{desc_path}'")
         return None
 
 

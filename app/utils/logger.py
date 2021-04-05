@@ -15,7 +15,7 @@ class Logger:
         self.logger = structlog.get_logger()
 
     def log(self, msg=None, log_type='info', level=0):
-        msg = str(' '.ljust((level * 2))) + str(msg)
+        msg = str(' '.ljust((level * 3))) + str(msg)
 
         if log_type == 'info':
             self.logger.info(msg)
