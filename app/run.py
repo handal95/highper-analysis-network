@@ -32,7 +32,8 @@ def run():
         'DATA_SHUFFLE': True,
         'MODEL': 'XGBoost',
         'options': {
-            'FIX_COLUMN_INFO': True
+            'FIX_COLUMN_INFO': True,
+            'FIX_COLUMN_AUTO': True,
         },
         'info': None,
         'meta': dict(),
@@ -42,14 +43,11 @@ def run():
         logger.log("Step 1 >> Data Preparation")
         logger.log("- 1 : Data Collection ", level=1)
         dataset = prepare_data(config)
-        input()
         metaset = prepare_meta(config, dataset)
-        input()
 
         dataset = analize_dataset(config, dataset, metaset)
-        input()
 
-        dataset = analize_feature(config, dataset)
+        dataset = analize_feature(config, dataset, metaset)
 
         logger.log("- 2 : Data Cleaning")
         # dataset = clean_duplicate(config, dataset)

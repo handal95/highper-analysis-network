@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import pprint
+from app.utils.file import open_csv
 from app.utils.logger import Logger
 
 
@@ -32,24 +33,22 @@ def prepare_meta(config, dataset):
 
 
     meta = create_meta_info(config, dataset)
-    meta["desc"] = read_description(config, meta)
+    meta = read_description(config, meta)
 
     return meta
 
 
 
 def read_csv(config, category):
-    file_path = os.path.join(config['DATASET_PATH'], f"{category}.csv")
-    index_col = config.get('INDEX_LABEL', None)
+    csv_file = open_csv(
+        filepath=os.path.join(config['DATASET_PATH'], f"{category}.csv"),
+        index_col=config.get('INDEX_LABEL', None)
+    )
 
-    try:
-        csv_file = pd.read_csv(file_path, index_col=index_col)            
+    if csv_file is not None:
         logger.log(f"- {category:5} data{csv_file.shape} is now loaded", level=3)
 
-        return csv_file
-    except FileNotFoundError:
-        return None
-
+    return csv_file
 
 
 def read_description(config, meta):
@@ -63,9 +62,7 @@ def read_description(config, meta):
             for desc_line in desc_list:
                 col, desc = desc_line.split(":")
                 
-                col.strip()
-                meta[col] = dict()
-                meta['DESC'] = desc.strip()
+                meta[col]['descript'] = desc.strip()
             
         return meta
             
@@ -95,21 +92,25 @@ def create_meta_info(config, dataset):
 
         meta[col] = {
             "index": i,
+            "name": col,
             "dtype": convert_dict(col_data.dtype),
             "descript": None,
             "nunique": col_data.nunique(),
             "na_count": col_data.isna().sum(),
-            "target": (meta["__target__"] == col)
+            "target": (meta["__target__"] == col),
+            "log": list()
         }
 
         if meta[col]["dtype"][:3] == "Cat":
             meta[col]["stat"] = {
                 "unique": col_data.unique(),
             }
+            meta[col]["dtype"] = f"{meta[col]['dtype']}_{meta[col]['nunique']}"
         elif meta[col]["dtype"][:3] == "Num":
             meta[col]["stat"] = {
                 "skew": round(col_data.skew(), 4),
-                "kurt": round(col_data.kurt(), 4)
+                "kurt": round(col_data.kurt(), 4),
+                "unique": col_data.unique(),
             }
 
     return meta

@@ -6,13 +6,16 @@ logger = structlog.get_logger()
 
 def request_user_input(msg, valid_inputs=None, valid_outputs=None, default=None):
     assert 'Q' not in valid_inputs
-    assert len(valid_inputs) == len(valid_outputs)
 
-    valid_inputs = [x.capitalize() for x in valid_inputs]
+    valid_inputs = [str(x).capitalize() for x in valid_inputs]
 
     if msg:
         logger.info(msg)
 
+    if valid_outputs is None:
+        valid_outputs = valid_inputs
+
+    assert len(valid_inputs) == len(valid_outputs)
 
     while True:
         user_input = input() or default

@@ -63,7 +63,7 @@ def fit_model(models, dataset):
         predicts["Lasso"] + predicts["ENet"] + predicts["GBoost"] + predicts["XGBoost"]
     )/4
     
-    train_score = np.sqrt(mean_squared_error(train_label, log_train_predict))
+    train_score = mean_squared_error(train_label, log_train_predict)
     print(f"Scoring with train data : {train_score}")
     
     return models
