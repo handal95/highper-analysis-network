@@ -4,9 +4,14 @@ from app.exc import QuitException
 logger = structlog.get_logger()
 
 
-def request_user_input(msg, valid_inputs=None, valid_outputs=None, default=None):
-    assert 'Q' not in valid_inputs
+def request_user_input(
+    msg="Please enter any key to proceed to the next step.",
+    valid_inputs=None, valid_outputs=None, default=None
+):
+    if valid_inputs is None:
+        return input(msg)
 
+    assert 'Q' not in valid_inputs
     valid_inputs = [str(x).capitalize() for x in valid_inputs]
 
     if msg:
