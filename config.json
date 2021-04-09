@@ -1,0 +1,14 @@
+{
+    "mode": "DEBUG",
+
+    "dataset":  {
+        "filepath": "house-prices-advanced-regression-techniques",
+        "dirpath": "D:/datasets",
+        "type": "CSV",
+
+        "index": "Id"
+    },
+    "metaset": {
+        "description": "description.txt"
+    }
+}
