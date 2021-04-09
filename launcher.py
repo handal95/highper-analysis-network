@@ -19,9 +19,9 @@ def _main_(args):
     logger.log("- 1 : Data Collection ", level=1)
 
     loader = DataLoader(config_path="./config.json")
-    dataset = loader.dataset
-    print(dataset['train'])
-        # run()
+
+    loader.analize_dataset()
+    # run()
 
 
 if __name__ == '__main__':
