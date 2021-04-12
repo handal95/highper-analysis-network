@@ -15,6 +15,7 @@
         "description": "description.txt"
     },
     "model": {
+        "MODEL": "Ensemble"
 
     },
     "options":{
