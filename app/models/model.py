@@ -13,7 +13,7 @@ logger = structlog.get_logger()
 
 
 def build_model(config):
-    logger.info(f" - Building a model [ {config['MODEL']} ]")
+    logger.info(f" - Building a model [ {config['model']['MODEL']} ]")
 
     model_Lasso = make_pipeline(
         RobustScaler(), Lasso(alpha =0.000327, random_state=18))
