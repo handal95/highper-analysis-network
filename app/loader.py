@@ -13,6 +13,7 @@ class DataLoader(object):
     """
     Data Loader
     """
+
     def __init__(self, config_path):
         self.config = open_json(config_path)
 
@@ -25,29 +26,31 @@ class DataLoader(object):
         self.metaset = self.load_metaset()
 
     def load_dataset(self):
-        self.logger.log(f"- {self.config['dataset']['category']} type dataset loading .. ", level=2)
+        self.logger.log(
+            f"- {self.config['dataset']['category']} type dataset loading .. ", level=2
+        )
 
-        #if self.format == "csv" TODO : Fill some other type of data
+        # if self.format == "csv" TODO : Fill some other type of data
         filepath = os.path.join(self.basepath, self.filepath + "." + self.format)
 
         self.logger.log(f"- '{filepath}' is now loading...", level=2)
 
         dataset = {
-            'train': self.read_csv('train'),
-            'valid': self.read_csv('valid'),
-            'test': self.read_csv('test')
+            "train": self.read_csv("train"),
+            "valid": self.read_csv("valid"),
+            "test": self.read_csv("test"),
         }
 
-        if dataset['test'] is None:
-            dataset = self.split_dataset(dataset, 'train', 'test')
+        if dataset["test"] is None:
+            dataset = self.split_dataset(dataset, "train", "test")
 
         return dataset
 
     def read_csv(self, name):
         filepath = os.path.join(self.basepath, self.filepath, name + "." + self.format)
-        
-        index_col = self.config["dataset"].get('index', None) 
-        index_col = index_col if index_col != 'None' else None
+
+        index_col = self.config["dataset"].get("index", None)
+        index_col = index_col if index_col != "None" else None
 
         try:
             csv_file = open_csv(filepath=filepath, index_col=index_col)
@@ -59,51 +62,55 @@ class DataLoader(object):
         return csv_file
 
     def split_dataset(self, dataset, origin, target):
-        split_ratio = self.config['dataset']['split_ratio']
+        split_ratio = self.config["dataset"]["split_ratio"]
 
         dataset[origin], dataset[target] = train_test_split(
-            dataset[origin], train_size=split_ratio, random_state=42)
+            dataset[origin], train_size=split_ratio, random_state=42
+        )
 
         self.logger.log(
             f"- {origin:5} data{dataset[origin].shape}"
             f", {target:5} data{dataset[target].shape}"
-            f"  (split ratio: {split_ratio})", level=3)
+            f"  (split ratio: {split_ratio})",
+            level=3,
+        )
 
         return dataset
 
-    
     def load_metaset(self):
         self.logger.log(f"- 1.2 Prepare metadata", level=2)
 
         def convert_dict(dtype):
             return {
-                'Int64': 'Num_int',
-                'Float64': 'Num_float',
-                'object': 'Cat',
+                "Int64": "Num_int",
+                "Float64": "Num_float",
+                "object": "Cat",
             }[dtype.name]
 
         def distribute(target, name):
             values = dataset[name][target].value_counts()
             length = metaset["__nrows__"][name]
-            return round(values/length*100, 3).to_frame(name=name)
-
+            return round(values / length * 100, 3).to_frame(name=name)
 
         dataset = self.dataset
 
         metaset = dict()
 
-        trainset, testset = dataset['train'], dataset['test']
+        trainset, testset = dataset["train"], dataset["test"]
         train_col, test_col = trainset.columns, testset.columns
 
-        target_label = self.config["dataset"].get("target_label", train_col.difference(test_col).values)
-        
+        target_label = self.config["dataset"].get(
+            "target_label", train_col.difference(test_col).values
+        )
+
         metaset["__target__"] = target_label
         metaset["__nrows__"] = {"train": len(trainset), "test": len(testset)}
         metaset["__ncolumns__"] = len(train_col)
         metaset["__columns__"] = pd.Series(train_col.values)
-        metaset['__distribution__'] = pd.concat(
-            [distribute(target_label, 'train'), distribute(target_label, 'test')],
-            axis=1, names=["train", "test"]
+        metaset["__distribution__"] = pd.concat(
+            [distribute(target_label, "train"), distribute(target_label, "test")],
+            axis=1,
+            names=["train", "test"],
         )
 
         for i, col in enumerate(metaset["__columns__"]):
@@ -116,7 +123,7 @@ class DataLoader(object):
                 "nunique": col_data.nunique(),
                 "na_count": col_data.isna().sum(),
                 "target": (metaset["__target__"] == col),
-                "log": list()
+                "log": list(),
             }
 
             if col_meta["dtype"][:3] == "Cat":
@@ -132,7 +139,7 @@ class DataLoader(object):
                 }
 
             metaset[col] = col_meta
-        
+
         metaset = self.read_description(metaset)
 
         return metaset
@@ -144,9 +151,10 @@ class DataLoader(object):
 
         descpath = os.path.join(
             self.config["dataset"]["dirpath"],
-            self.config["dataset"]["filepath"], descfile
+            self.config["dataset"]["filepath"],
+            descfile,
         )
-        
+
         try:
             with open(descpath, "r", newline="\r\n") as desc_file:
                 self.logger.log(f"- '{descpath}' is now loaded", level=3)
@@ -154,11 +162,10 @@ class DataLoader(object):
                 desc_list = desc_file.read().splitlines()
                 for desc_line in desc_list:
                     col, desc = desc_line.split(":")
-                    
-                    metaset[col]['descript'] = desc.strip()
-                
+
+                    metaset[col]["descript"] = desc.strip()
+
             return metaset
-                
 
         except FileNotFoundError as e:
             self.logger.warn(f"Description File Not Found Error, '{descpath}'")

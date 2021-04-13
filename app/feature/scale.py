@@ -4,6 +4,7 @@ from sklearn.preprocessing import StandardScaler
 
 logger = structlog.get_logger()
 
+
 def scale_feature(config, dataset):
     logger.info(f"   - Scaling data")
     (train_data, train_label), (test_data, test_label) = dataset

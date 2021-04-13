@@ -4,9 +4,10 @@ class HANException(Exception):
 
     def __str__(self):
         if self.message:
-            return 'MyCustomError, {0}'.format(self.message)
+            return "MyCustomError, {0}".format(self.message)
         else:
-            return 'MyCustomError has been raised'
+            return "MyCustomError has been raised"
+
 
 class QuitException(HANException):
     def __init__(self, *args):

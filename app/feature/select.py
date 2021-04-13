@@ -4,6 +4,7 @@ import seaborn as sns
 
 logger = structlog.get_logger()
 
+
 def select_feature(config, dataset):
     logger.info(f"   - Select Feature")
 
@@ -12,21 +13,24 @@ def select_feature(config, dataset):
 
     return dataset
 
+
 def show_corr_image(dataset):
     new_corr = dataset.corr()
-    heatmap = sns.heatmap(new_corr, linewidths=.5, vmin=0, vmax=1, square=True, cmap="RdYlGn")
+    heatmap = sns.heatmap(
+        new_corr, linewidths=0.5, vmin=0, vmax=1, square=True, cmap="RdYlGn"
+    )
     plt.show()
 
 
 def drop_uncorr_feature(config, dataset):
     logger.info(f"     - Drop uncorr Feature")
-    
+
     corr = dataset.corr()
     drop_cols = corr.index[corr[config["TARGET_LABEL"][0]] < 0.3]
     logger.info(f"     - Dropped cols # {len(drop_cols)} \n {drop_cols}")
 
     dataset = dataset.drop(drop_cols, axis=1)
-    
+
     return dataset
 
 

@@ -15,34 +15,50 @@ logger = structlog.get_logger()
 def build_model(config):
     logger.info(f" - Building a model [ {config['model']['MODEL']} ]")
 
-    model_Lasso = make_pipeline(
-        RobustScaler(), Lasso(alpha =0.000327, random_state=18))
+    model_Lasso = make_pipeline(RobustScaler(), Lasso(alpha=0.000327, random_state=18))
 
     model_ENet = make_pipeline(
-        RobustScaler(), ElasticNet(alpha=0.00052, l1_ratio=0.70654, random_state=18))
+        RobustScaler(), ElasticNet(alpha=0.00052, l1_ratio=0.70654, random_state=18)
+    )
 
     model_GBoost = GradientBoostingRegressor(
-        n_estimators=3000, learning_rate=0.05, max_depth=4, max_features='sqrt', min_samples_leaf=15, 
-        min_samples_split=10, loss='huber', random_state=18)
+        n_estimators=3000,
+        learning_rate=0.05,
+        max_depth=4,
+        max_features="sqrt",
+        min_samples_leaf=15,
+        min_samples_split=10,
+        loss="huber",
+        random_state=18,
+    )
 
-    model_XGB=XGBRegressor(
-        colsample_bylevel=0.9229733609038979,colsample_bynode=0.21481791874780318,colsample_bytree=0.607964318297635, 
-        gamma=0.8989889254961725, learning_rate=0.009192310189734834, max_depth=3, n_estimators=3602, 
-        reg_alpha=3.185674564163364e-12,reg_lambda=4.95553539265423e-13, seed=18, subsample=0.8381904293270576,
-        verbosity=0
+    model_XGB = XGBRegressor(
+        colsample_bylevel=0.9229733609038979,
+        colsample_bynode=0.21481791874780318,
+        colsample_bytree=0.607964318297635,
+        gamma=0.8989889254961725,
+        learning_rate=0.009192310189734834,
+        max_depth=3,
+        n_estimators=3602,
+        reg_alpha=3.185674564163364e-12,
+        reg_lambda=4.95553539265423e-13,
+        seed=18,
+        subsample=0.8381904293270576,
+        verbosity=0,
     )
 
     models = {
-        "Lasso" : model_Lasso,
-        "ENet" : model_ENet,
-        "GBoost" : model_GBoost,
-        "XGBoost" : model_XGB
+        "Lasso": model_Lasso,
+        "ENet": model_ENet,
+        "GBoost": model_GBoost,
+        "XGBoost": model_XGB,
     }
 
     return models
 
+
 def fit_model(models, dataset):
-   
+
     (train_data, train_label), test = dataset
 
     train_data = train_data[:-1]
@@ -61,12 +77,13 @@ def fit_model(models, dataset):
 
     log_train_predict = (
         predicts["Lasso"] + predicts["ENet"] + predicts["GBoost"] + predicts["XGBoost"]
-    )/4
-    
+    ) / 4
+
     train_score = mean_squared_error(train_label, log_train_predict)
     print(f"Scoring with train data : {train_score}")
-    
+
     return models
+
 
 def estimate_model(models):
     return

@@ -3,6 +3,7 @@ from app.utils.file import open_json
 from app.utils.command import request_user_input
 import pandas as pd
 
+
 class Dataanalyzer(object):
     def __init__(self, config_path, dataset, metaset):
         self.config = open_json(config_path)
@@ -15,8 +16,8 @@ class Dataanalyzer(object):
         dataset = self.dataset
         metaset = self.metaset
 
-        pd.set_option('display.max_columns', metaset['__ncolumns__'])
-        pd.set_option('display.width', 1000)
+        pd.set_option("display.max_columns", metaset["__ncolumns__"])
+        pd.set_option("display.width", 1000)
 
         self.logger.log(
             f"DATASET Analysis \n"
@@ -31,22 +32,21 @@ class Dataanalyzer(object):
         request_user_input()
         self.analize_dtype()
 
-    
     def analize_dtype(self):
         self.logger.log(" - 2.1 Analize Dtype", level=2)
-        
+
         # SHOW INFO
         info = list()
-        columns = self.metaset['__columns__']
+        columns = self.metaset["__columns__"]
         for col in columns:
             col_meta = self.metaset[col]
             col_info = {
                 "name": col,
-                "dtype": col_meta['dtype'],
-                "desc": col_meta['descript'],
+                "dtype": col_meta["dtype"],
+                "desc": col_meta["descript"],
             }
             for i in range(1, 6):
-                col_info[f"sample{i}"] = self.dataset['train'][col][i]
+                col_info[f"sample{i}"] = self.dataset["train"][col][i]
 
             info.append(col_info)
         info_df = pd.DataFrame(info)
@@ -55,13 +55,19 @@ class Dataanalyzer(object):
         # USER COMMAND
         answer = request_user_input(
             "Are there any issues that need to be corrected? ( Y / n )",
-            valid_inputs=['Y', 'N'], valid_outputs=[True, False], default='Y'
+            valid_inputs=["Y", "N"],
+            valid_outputs=[True, False],
+            default="Y",
         )
         while answer:
-            target_index = int(request_user_input(
-                f"Please enter the index of the target to be modified.",
-                valid_inputs=range(len(columns)), skipable=True, default=None
-            ))
+            target_index = int(
+                request_user_input(
+                    f"Please enter the index of the target to be modified.",
+                    valid_inputs=range(len(columns)),
+                    skipable=True,
+                    default=None,
+                )
+            )
 
             if target_index is None:
                 break
@@ -71,25 +77,30 @@ class Dataanalyzer(object):
 
             right_dtype = request_user_input(
                 f"Please enter right dtype [num-int, num-float, bool]",
-                valid_inputs=["num-int", "num-float", "bool"], skipable=True, default=None
+                valid_inputs=["num-int", "num-float", "bool"],
+                skipable=True,
+                default=None,
             )
 
             print(f"you select dtype {right_dtype}")
 
             if right_dtype == "Bool":
-                self.dataset['train'][target_col]=self.dataset['train'][target_col].replace({True: 1, False: 0}, inplace=True)
-                print(self.dataset['train'][target_col][1:5])
+                self.dataset["train"][target_col] = self.dataset["train"][
+                    target_col
+                ].replace({True: 1, False: 0}, inplace=True)
+                print(self.dataset["train"][target_col][1:5])
 
             if right_dtype == "Cat":
-                self.dataset['train'][target_col].convert_dtypes(con)
+                self.dataset["train"][target_col].convert_dtypes(con)
 
-            print(self.dataset['train'][target_col].dtype)
+            print(self.dataset["train"][target_col].dtype)
 
             answer = request_user_input(
                 "Are there more issues that need to be corrected? ( Y / n )",
-                valid_inputs=['Y', 'N'], valid_outputs=[True, False], default='Y'
+                valid_inputs=["Y", "N"],
+                valid_outputs=[True, False],
+                default="Y",
             )
-
 
     def analize_dataset(self):
         metaset = self.metaset
@@ -105,10 +116,9 @@ class Dataanalyzer(object):
             f"  [test  distribute(percent.)]\n{metaset['__distribution__']['test']} \n"
         )
 
- 
         request_user_input()
 
-        for i, col in enumerate(metaset['__columns__']):
+        for i, col in enumerate(metaset["__columns__"]):
             col_meta = metaset[col]
             self.logger.log(
                 f"{col_meta['index']:3d} "
@@ -116,21 +126,23 @@ class Dataanalyzer(object):
                 f"{col_meta['dtype']:10} "
                 f"{col_meta['descript']}"
             )
-        
-        self.config['options']['FIX_COLUMN_INFO'] = request_user_input(
+
+        self.config["options"]["FIX_COLUMN_INFO"] = request_user_input(
             "Are there any issues that need to be corrected? ( Y / n )",
-            valid_inputs=['Y', 'N'], valid_outputs=[True, False], default='Y'
+            valid_inputs=["Y", "N"],
+            valid_outputs=[True, False],
+            default="Y",
         )
 
-        if self.config['options']['FIX_COLUMN_INFO'] is True:
+        if self.config["options"]["FIX_COLUMN_INFO"] is True:
             self.analize_feature()
 
     def analize_feature(self):
         self.logger.log("- 1.1.+ : Check Data Features", level=2)
 
-        for i, col in enumerate(self.metaset['__columns__']):
+        for i, col in enumerate(self.metaset["__columns__"]):
             col_meta = self.metaset[col]
-            col_data = self.dataset['train'][col]
+            col_data = self.dataset["train"][col]
             print_meta_info(col_meta, col_data)
 
             # if min(col_data) >= 0:
@@ -178,16 +190,20 @@ def print_meta_info(col_meta, col_data):
         f" - {col_meta['descript']}"
     )
 
-    if col_meta['dtype'][:3] == "Num":
+    if col_meta["dtype"][:3] == "Num":
         print(f" === Numerical stat === \n")
-        print(f" skew     : {col_meta['stat']['skew']} ") if col_meta['stat'].get('skew', None) else None
-        print(f" kurt     : {col_meta['stat']['kurt']} ") if col_meta['stat'].get('kurt', None) else None
+        print(f" skew     : {col_meta['stat']['skew']} ") if col_meta["stat"].get(
+            "skew", None
+        ) else None
+        print(f" kurt     : {col_meta['stat']['kurt']} ") if col_meta["stat"].get(
+            "kurt", None
+        ) else None
         print(
             f" nunique  : {col_meta['nunique']} \n"
             f" values  : {col_meta['stat']['unique'][:10]} ... \n"
             f" na count : {col_meta['na_count']}"
         )
-        print(col_data.describe(percentiles=[.03, .25, .50, .75, .97]))
+        print(col_data.describe(percentiles=[0.03, 0.25, 0.50, 0.75, 0.97]))
     else:
         print(
             f" === Categorical stat === \n"
@@ -196,7 +212,7 @@ def print_meta_info(col_meta, col_data):
             f" na count : {col_meta['na_count']}"
         )
 
-    for log in col_meta['log']:
+    for log in col_meta["log"]:
         print(f" Log : {log}")
 
     print()
