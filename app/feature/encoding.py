@@ -1,7 +1,7 @@
-import structlog
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+import structlog
 from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
 
 logger = structlog.get_logger()
 

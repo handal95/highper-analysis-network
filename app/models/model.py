@@ -1,13 +1,13 @@
-import structlog
 import numpy as np
-from sklearn.pipeline import make_pipeline
+import structlog
+from catboost import CatBoostRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import ElasticNet, Lasso
-from sklearn.preprocessing import RobustScaler
-from catboost import CatBoostRegressor
-from xgboost import XGBRegressor
-from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import RobustScaler
+from xgboost import XGBRegressor
 
 logger = structlog.get_logger()
 

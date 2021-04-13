@@ -1,8 +1,9 @@
 import os
+
 import numpy as np
 import pandas as pd
-from app.utils.logger import Logger
 from app.utils.command import request_user_input
+from app.utils.logger import Logger
 
 logger = Logger()
 

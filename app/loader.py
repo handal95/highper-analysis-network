@@ -1,12 +1,14 @@
 import os
-from app.utils.file import open_json, open_csv
-from app.utils.logger import Logger
-from app.utils.command import request_user_input
-from sklearn.model_selection import train_test_split
+
 import matplotlib.pyplot as plt
-import pandas as pd
 import numpy as np
+import pandas as pd
 import seaborn as sns
+from sklearn.model_selection import train_test_split
+
+from app.utils.command import request_user_input
+from app.utils.file import open_csv, open_json
+from app.utils.logger import Logger
 
 
 class DataLoader(object):

@@ -1,10 +1,10 @@
 import os
-import pandas as pd
-import numpy as np
 import pprint
+
+import numpy as np
+import pandas as pd
 from app.utils.file import open_csv
 from app.utils.logger import Logger
-
 
 logger = Logger()
 

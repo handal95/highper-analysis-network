@@ -1,7 +1,8 @@
-from app.utils.logger import Logger
-from app.utils.file import open_json
-from app.utils.command import request_user_input
 import pandas as pd
+
+from app.utils.command import request_user_input
+from app.utils.file import open_json
+from app.utils.logger import Logger
 
 
 class Dataanalyzer(object):
