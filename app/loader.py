@@ -4,6 +4,7 @@ from app.utils.logger import Logger
 from app.utils.command import request_user_input
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+import pandas as pd
 import numpy as np
 import seaborn as sns
 
@@ -76,12 +77,17 @@ class DataLoader(object):
 
         def convert_dict(dtype):
             return {
-                'int64': 'Num_int',
-                'float64': 'Num_float',
+                'Int64': 'Num_int',
+                'Float64': 'Num_float',
                 'object': 'Cat',
             }[dtype.name]
 
-        desc_path = self.config.get("DESCRIPT_PATH", None)
+        def distribute(target, name):
+            values = dataset[name][target].value_counts()
+            length = metaset["__nrows__"][name]
+            return round(values/length*100, 3).to_frame(name=name)
+
+
         dataset = self.dataset
 
         metaset = dict()
@@ -94,20 +100,18 @@ class DataLoader(object):
         metaset["__target__"] = target_label
         metaset["__nrows__"] = {"train": len(trainset), "test": len(testset)}
         metaset["__ncolumns__"] = len(train_col)
-        metaset["__columns__"] = train_col.values
-        train_distribution = dataset['train'][target_label].value_counts()
-        test_distribution = dataset['test'][target_label].value_counts()
-        metaset["__distribution__"] = {
-            'train': (train_distribution/len(trainset))*100,
-            'test': (test_distribution/len(testset))*100,
-        }
+        metaset["__columns__"] = pd.Series(train_col.values)
+        metaset['__distribution__'] = pd.concat(
+            [distribute(target_label, 'train'), distribute(target_label, 'test')],
+            axis=1, names=["train", "test"]
+        )
 
         for i, col in enumerate(metaset["__columns__"]):
-            col_data = trainset[col]
+            col_data = trainset[col].convert_dtypes()
             col_meta = {
                 "index": i,
                 "name": col,
-                "dtype": convert_dict(col_data.dtype),
+                "dtype": str(col_data.dtype),
                 "descript": None,
                 "nunique": col_data.nunique(),
                 "na_count": col_data.isna().sum(),
@@ -120,7 +124,7 @@ class DataLoader(object):
                     "unique": col_data.unique(),
                 }
                 col_meta["dtype"] = f"{col_meta['dtype']}_{col_meta['nunique']}"
-            elif col_meta["dtype"][:3] == "Num":
+            elif col_meta["dtype"] == "Int64" or col_meta["dtype"] == "Float64":
                 col_meta["stat"] = {
                     "skew": round(col_data.skew(), 4),
                     "kurt": round(col_data.kurt(), 4),
@@ -128,5 +132,34 @@ class DataLoader(object):
                 }
 
             metaset[col] = col_meta
+        
+        metaset = self.read_description(metaset)
 
         return metaset
+
+    def read_description(self, metaset):
+        descfile = self.config["metaset"].get("descpath", None)
+        if descfile is None:
+            return
+
+        descpath = os.path.join(
+            self.config["dataset"]["dirpath"],
+            self.config["dataset"]["filepath"], descfile
+        )
+        
+        try:
+            with open(descpath, "r", newline="\r\n") as desc_file:
+                self.logger.log(f"- '{descpath}' is now loaded", level=3)
+
+                desc_list = desc_file.read().splitlines()
+                for desc_line in desc_list:
+                    col, desc = desc_line.split(":")
+                    
+                    metaset[col]['descript'] = desc.strip()
+                
+            return metaset
+                
+
+        except FileNotFoundError as e:
+            self.logger.warn(f"Description File Not Found Error, '{descpath}'")
+            return None
