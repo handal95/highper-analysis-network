@@ -74,7 +74,7 @@ def analize_feature(config, dataset, metaset):
     return dataset
 
 
-def dtype_analizer(col, dtype, dataset):
+def dtype_analyzer(col, dtype, dataset):
     info = dict()
     if dtype == 'Cat.':
         info['na_count'] = dataset['train'][col].isna().sum()
