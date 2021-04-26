@@ -15,6 +15,7 @@ argparser.add_argument("-s", "--skip", help="skipped process")
 
 
 def _main_(args):
+    init_logger()
     logger = Logger()
 
     logger.log("Step 0 >> Setting ")
@@ -42,5 +43,7 @@ def _main_(args):
 
 
 if __name__ == "__main__":
-    init_logger()
-    _main_(argparser.parse_args())
+    parser = argparse.ArgumentParser()
+
+    opt = parser.parse_args()
+    _main_(opt)
