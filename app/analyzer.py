@@ -3,6 +3,7 @@ import pandas as pd
 from app.utils.command import request_user_input
 from app.utils.file import open_json
 from app.utils.logger import Logger
+from app.utils.eda import EDA
 
 
 class Dataanalyzer(object):
@@ -10,6 +11,7 @@ class Dataanalyzer(object):
         self.config = open_json(config_path)
 
         self.logger = Logger()
+        self.eda = EDA(self.config["analyzer"])
         self.dataset = dataset
         self.metaset = metaset
 
@@ -30,7 +32,14 @@ class Dataanalyzer(object):
             f" Label Distribution  :\n{metaset['__distribution__']} \n"
         )
 
+        self.eda.countplot(
+            dataframe=dataset["train"],
+            column=metaset["__target__"],
+            title="Target Label Distributions",
+        )
+
         request_user_input()
+
         self.analize_dtype()
 
     def analize_dtype(self):
