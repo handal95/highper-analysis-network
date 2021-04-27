@@ -6,6 +6,8 @@ from app.data.prepare import prepare_data
 from app.loader import DataLoader
 from app.analyzer import Dataanalyzer
 from app.model import ModelGenerator
+from app.preprocessor import PreProcessor
+
 
 argparser = argparse.ArgumentParser(description="cli command")
 
@@ -25,7 +27,9 @@ def _main_(args):
 
     logger.log("- 2 : Data Analization ", level=1)
     analyzer = Dataanalyzer(
-        config_path="./config.json", dataset=loader.dataset, metaset=loader.metaset
+        config_path="./config.json",
+        dataset=loader.dataset,
+        metaset=loader.metaset,
     )
     analyzer.analize()
 
@@ -33,12 +37,20 @@ def _main_(args):
     model_generator = ModelGenerator(config_path="./config.json")
     models = model_generator.models
 
-    logger.log("Step 5 >> Model Evaluation")
-    models = model_generator.fit_model(
-        dataset=analyzer.dataset, metaset=analyzer.metaset
+    logger.log("Step 4 >> Data Preprocess")
+    preprocessor = PreProcessor(
+        config_path="./config.json",
+        dataset=analyzer.dataset,
+        metaset=analyzer.metaset,
     )
 
-    # run()
+    # (x_value, x_label), (y_value, y_label) = preprocessor.label_split()
+
+    logger.log("Step 5 >> Model Evaluation")
+    models = model_generator.fit_model(
+        dataset=analyzer.dataset,
+        metaset=analyzer.metaset,
+    )
 
 
 if __name__ == "__main__":

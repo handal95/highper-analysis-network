@@ -4,7 +4,16 @@ from sklearn.linear_model import ElasticNet, Lasso
 from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import RobustScaler
+from sklearn.linear_model import LogisticRegression
 from xgboost import XGBRegressor
+from sklearn.metrics import (
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score,
+    accuracy_score,
+    classification_report,
+)
 
 from app.utils.file import open_csv, open_json
 from app.utils.logger import Logger
@@ -54,45 +63,61 @@ class ModelGenerator(object):
             verbosity=0,
         )
 
+        model_logistic = LogisticRegression()
+
         models = {
             "Lasso": model_Lasso,
             "ENet": model_ENet,
             "GBoost": model_GBoost,
             "XGBoost": model_XGB,
+            "LogReg": model_logistic
         }
 
         return models
 
     def fit_model(self, dataset, metaset):
+        dataset["valid"] = dataset["train"][:45569]
+        dataset["train"] = dataset["train"][45569:]
+
         train_label = dataset["train"][metaset["__target__"]]
-        train_data = dataset["train"].drop(columns=metaset["__target__"])
+        train_value = dataset["train"].drop(columns=metaset["__target__"])
+
+        valid_label = dataset["valid"][metaset["__target__"]]
+        valid_value = dataset["valid"].drop(columns=metaset["__target__"])
 
         predicts = dict()
         models = self.models
-        print("FIT - LASSO")
-        models["Lasso"].fit(train_data, train_label)
-        print("FIT - ENET")
-        models["ENet"].fit(train_data, train_label)
-        print("FIT - GBOOST")
-        models["GBoost"].fit(train_data, train_label)
-        print("FIT - XGBOOST")
-        models["XGBoost"].fit(train_data, train_label)
 
-        print("PREDICT - LASSO")
-        predicts["Lasso"] = models["Lasso"].predict(train_data)
-        print("PREDICT - ENET")
-        predicts["ENet"] = models["ENet"].predict(train_data)
-        print("PREDICT - GBOOST")
-        predicts["GBoost"] = models["GBoost"].predict(train_data)
-        print("PREDICT - XGBOOST")
-        predicts["XGBoost"] = models["XGBoost"].predict(train_data)
+        def fitting(model, x_train, x_test, y_train, y_test):
+            model.fit(x_train, y_train)
+            y_pred = model.predict(x_test)
+            self.metrics(y_test, y_pred)
+            return y_pred
 
-        log_train_predict = (
-            predicts["Lasso"]
-            + predicts["ENet"]
-            + predicts["GBoost"]
-            + predicts["XGBoost"]
-        ) / 4
+        print("FIT - LogReg")
+        predicts["LogReg"] = fitting(
+            model=models["LogReg"],
+            x_train=train_value,
+            x_test=valid_value,
+            y_train=train_label,
+            y_test=valid_label,
+        )
 
-        train_score = mean_squared_error(train_label, log_train_predict)
-        print(f"Scoring with train data : {train_score}")
+        # log_train_predict = (
+        #     predicts["Lasso"]
+        #     + predicts["ENet"]
+        #     + predicts["GBoost"]
+        #     + predicts["XGBoost"]
+        # ) / 4
+
+        # train_score = mean_squared_error(train_label, log_train_predict)
+        # print(f"Scoring with train data : {train_score}")
+
+    def metrics(self, y_test, y_pred):
+        accuracy = accuracy_score(y_test, y_pred)
+        precision = precision_score(y_test, y_pred)
+        recall = recall_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred)
+        roc_score = roc_auc_score(y_test, y_pred, average="macro")
+        print(f"accr : {accuracy:.2f}, prec : {precision:.2f}, recall : {recall:.2f}")
+        print(f"f1   : {f1:.2f},  auc : {roc_score:.2f}")
