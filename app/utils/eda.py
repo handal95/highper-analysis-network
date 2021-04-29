@@ -6,8 +6,9 @@ class EDA(object):
     def __init__(self, config):
         self.config = config
 
-    @classmethod
-    def countplot(cls, dataframe, column, title):
+    def countplot(self, dataframe, column, title):
+        if self.config["visualization"] == "False":
+            return
         sns.countplot(x=column, data=dataframe)
         plt.title(title)
         plt.show()

@@ -1,17 +1,17 @@
 {
     "mode": "DEBUG",
     "dataset": {
-        "filepath": "credit-card-fraud-detection-prediction",
+        "filepath": "bike-sharing-demand",
         "dirpath": "D:/datasets",
         "format": "CSV",
         "category": "TIMESERIES",
         "index": "None",
-        "target_label": "Class",
+        "target_label": "count",
         "split_ratio": 0.8
     },
     "analyzer": {
         "target_balancing": "equal",
-        "visualization": "True"
+        "visualization": "False"
     },
     "metaset": {
         "descpath": "description.txt"
