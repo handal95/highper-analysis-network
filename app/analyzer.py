@@ -6,7 +6,7 @@ from app.utils.logger import Logger
 from app.utils.eda import EDA
 
 
-class Dataanalyzer(object):
+class DataAnalyzer(object):
     def __init__(self, config_path, dataset, metaset):
         self.config = open_json(config_path)
 
@@ -29,7 +29,7 @@ class Dataanalyzer(object):
             f" Total Columns num   : {metaset['__ncolumns__']}  \n"
             f" Target label        : {metaset['__target__']} \n"
             f" Target dtype        : {dataset['train'][metaset['__target__']].dtype} \n"
-            f" Label Distribution  :\n{metaset['__distribution__']} \n"
+            # " Label Distribution  :\n{metaset['__distribution__']} \n"
         )
 
         self.eda.countplot(
@@ -46,21 +46,8 @@ class Dataanalyzer(object):
         self.logger.log(" - 2.1 Analize Dtype", level=2)
 
         # SHOW INFO
-        info = list()
         columns = self.metaset["__columns__"]
-        for col in columns:
-            col_meta = self.metaset[col]
-            col_info = {
-                "name": col,
-                "dtype": col_meta["dtype"],
-                "desc": col_meta["descript"],
-            }
-            for i in range(1, 6):
-                col_info[f"sample{i}"] = self.dataset["train"][col][i]
-
-            info.append(col_info)
-        info_df = pd.DataFrame(info)
-        self.logger.log(f" - Dtype \n {info_df}\n\n", level=3)
+        info_df = self.get_meta_info(columns)
 
         # USER COMMAND
         answer = request_user_input(
@@ -86,8 +73,8 @@ class Dataanalyzer(object):
             self.logger.log(f"\n{info_df[info_df['name']==target_col]}")
 
             right_dtype = request_user_input(
-                f"Please enter right dtype [num-int, num-float, bool]",
-                valid_inputs=["num-int", "num-float", "bool"],
+                f"Please enter right dtype [num-int, num-float, bool, datetime]",
+                valid_inputs=["num-int", "num-float", "bool", "datetime"],
                 skipable=True,
                 default=None,
             )
@@ -101,10 +88,15 @@ class Dataanalyzer(object):
                 print(self.dataset["train"][target_col][1:5])
 
             if right_dtype == "Cat":
-                self.dataset["train"][target_col].convert_dtypes(con)
+                self.dataset["train"][target_col].convert_dtypes()
+
+            if right_dtype == "Datetime":
+                self.convert_dtype(target_col, right_dtype)
 
             print(self.dataset["train"][target_col].dtype)
 
+            columns = self.metaset["__columns__"]
+            info_df = self.get_meta_info(columns)
             answer = request_user_input(
                 "Are there more issues that need to be corrected? ( Y / n )",
                 valid_inputs=["Y", "N"],
@@ -192,6 +184,63 @@ class Dataanalyzer(object):
 
         return self.dataset
 
+    def convert_dtype(self, col, right_dtype):
+        if right_dtype == "Datetime":
+            self.convert_datetime(col)
+
+    def convert_datetime(self, col):
+        self.dataset["train"][col] = pd.to_datetime(self.dataset["train"][col])
+        self.metaset[col]["log"].append(
+            f"dtype changed : {self.metaset[col]['dtype']} to Datetime")
+        self.metaset[col]["dtype"] = "Datetime"
+
+        answer = request_user_input(
+            "Do you want to split datetime? ( Y / n )",
+            valid_inputs=["Y", "N"],
+            valid_outputs=[True, False],
+            default="Y",
+        )
+
+        if answer:
+            self.dataset["train"][f"{col}_year"] = self.dataset["train"][col].dt.year
+            self.dataset["train"][f"{col}_month"] = self.dataset["train"][col].dt.month
+            self.dataset["train"][f"{col}_day"] = self.dataset["train"][col].dt.day
+            self.dataset["train"][f"{col}_hour"] = self.dataset["train"][col].dt.hour
+            self.dataset["train"][f"{col}_min"] = self.dataset["train"][col].dt.minute
+            self.dataset["train"][f"{col}_sec"] = self.dataset["train"][col].dt.second
+            self.dataset["train"][f"{col}_dow"] = self.dataset["train"][col].dt.dayofweek
+            self.metaset["__ncolumns__"] = self.metaset["__ncolumns__"] + 1
+            self.metaset[f"{col}_year"] = {
+                "index": 12,
+                "name": f"{col}_year",
+                "dtype": str(self.dataset["train"][f"{col}_year"].dtype),
+                "descript": None,
+                "nunique": self.dataset["train"][f"{col}_year"].nunique(),
+                "na_count": self.dataset["train"][f"{col}_year"].isna().sum(),
+                "target": False,
+                "log": list()
+            }
+            print(self.metaset["__columns__"])
+            self.metaset["__columns__"] = self.metaset["__columns__"].append(pd.Series(f"{col}_year"))
+            print(self.metaset["__columns__"])
+
+    
+    def get_meta_info(self, columns):
+        info = list()
+        for col in columns:
+            col_meta = self.metaset[col]
+            col_info = {
+                "name": col,
+                "dtype": col_meta["dtype"],
+                "desc": col_meta["descript"],
+            }
+            for i in range(1, 6):
+                col_info[f"sample{i}"] = self.dataset["train"][col][i]
+
+            info.append(col_info)
+        info_df = pd.DataFrame(info)
+        self.logger.log(f" - Dtype \n {info_df}\n\n", level=3)
+        return info_df
 
 def print_meta_info(col_meta, col_data):
     print(

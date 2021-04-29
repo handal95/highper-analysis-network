@@ -4,7 +4,7 @@ import argparse
 from app.utils.logger import Logger, init_logger
 from app.data.prepare import prepare_data
 from app.loader import DataLoader
-from app.analyzer import Dataanalyzer
+from app.analyzer import DataAnalyzer
 from app.model import ModelGenerator
 from app.preprocessor import PreProcessor
 
@@ -27,7 +27,7 @@ def _main_(args):
     loader = DataLoader(config_path="./config.json")
 
     logger.log("- 2 : Data Analization ", level=1)
-    analyzer = Dataanalyzer(
+    analyzer = DataAnalyzer(
         config_path="./config.json",
         dataset=loader.dataset,
         metaset=loader.metaset,
