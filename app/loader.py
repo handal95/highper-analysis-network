@@ -24,18 +24,21 @@ class DataLoader(object):
         self.format = self.config["dataset"]["format"].lower()
 
         self.logger = Logger()
-        self.dataset = self.load_dataset()
-        self.metaset = self.load_metaset()
+        self.dataset = self.load_dataset()  # 1.1
+        self.metaset = self.load_metaset()  # 1.2
 
     def load_dataset(self):
+        """
+        1.1 Data Loading
+        """
         self.logger.log(
-            f"- {self.config['dataset']['category']} type dataset loading .. ", level=2
+            f"- 1.1 {self.config['dataset']['category']} type dataset loading .. ", level=2
         )
 
         # if self.format == "csv" TODO : Fill some other type of data
-        filepath = os.path.join(self.basepath, self.filepath + "." + self.format)
+        self.filepath = os.path.join(self.basepath, self.filepath)
 
-        self.logger.log(f"- '{filepath}' is now loading...", level=2)
+        self.logger.log(f"- '{self.filepath}' is now loading...", level=2)
 
         dataset = {
             "train": self.read_csv("train"),
@@ -80,6 +83,9 @@ class DataLoader(object):
         return dataset
 
     def load_metaset(self):
+        """
+        1.2
+        """
         self.logger.log(f"- 1.2 Prepare metadata", level=2)
 
         def convert_dict(dtype):
@@ -90,9 +96,14 @@ class DataLoader(object):
             }[dtype.name]
 
         def distribute(target, name):
-            values = dataset[name][target].value_counts()
-            length = metaset["__nrows__"][name]
-            return round(values / length * 100, 3).to_frame(name=name)
+            try:
+                values = dataset[name][target].value_counts()
+                length = metaset["__nrows__"][name]
+                distribution = round(values / length * 100, 3).to_frame(name=name)
+                return distribution
+            except:
+                self.logger.warn(f"{name} set doesn't have {target}", level=3)
+                return None
 
         dataset = self.dataset
 
@@ -143,20 +154,19 @@ class DataLoader(object):
             metaset[col] = col_meta
 
         metaset = self.read_description(metaset)
-
         return metaset
 
     def read_description(self, metaset):
         descfile = self.config["metaset"].get("descpath", None)
         if descfile is None:
-            return
+            return metaset
 
         descpath = os.path.join(
             self.config["dataset"]["dirpath"],
             self.config["dataset"]["filepath"],
             descfile,
         )
-
+        
         try:
             with open(descpath, "r", newline="\r\n") as desc_file:
                 self.logger.log(f"- '{descpath}' is now loaded", level=3)
@@ -171,4 +181,4 @@ class DataLoader(object):
 
         except FileNotFoundError as e:
             self.logger.warn(f"Description File Not Found Error, '{descpath}'")
-            return None
+            return metaset
