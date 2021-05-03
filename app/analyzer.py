@@ -4,7 +4,7 @@ from app.utils.command import request_user_input
 from app.utils.file import open_json
 from app.utils.logger import Logger
 from app.utils.eda import EDA
-from app.meta import add_col_info, get_meta_info
+from app.meta import add_col_info, get_meta_info, show_col_info, update_col_info
 
 class DataAnalyzer(object):
     def __init__(self, config_path, dataset, metaset):
@@ -40,7 +40,8 @@ class DataAnalyzer(object):
 
         request_user_input()
 
-        self.analize_dtype()
+        self.analize_dtype()  # 2.1
+        self.analize_feature()
 
     def analize_dtype(self):
         self.logger.log(" - 2.1 Analize Dtype", level=2)
@@ -50,12 +51,8 @@ class DataAnalyzer(object):
         print(info_df)
 
         # USER COMMAND
-        answer = request_user_input(
-            "Are there any issues that need to be corrected? ( Y / n )",
-            valid_inputs=["Y", "N"],
-            valid_outputs=[True, False],
-            default="Y",
-        )
+        answer = ask_boolean("Are there any issues that need to be corrected?")
+
         while answer:
             target_index = int(
                 request_user_input(
@@ -73,34 +70,18 @@ class DataAnalyzer(object):
             target_col = self.metaset["__columns__"][target_index]
 
             right_dtype = request_user_input(
-                f"Please enter right dtype [num-int, num-float, bool, datetime]",
-                valid_inputs=["num-int", "num-float", "bool", "datetime"],
+                f"Please enter right dtype [num-int, num-float, bool, category, datetime]",
+                valid_inputs=["num-int", "num-float", "bool", "category", "datetime"],
                 skipable=True,
                 default=None,
             )
 
             print(f"you select dtype {right_dtype}")
-            
-            if right_dtype == "Bool":
-                self.dataset["train"][target_col] = self.dataset["train"][
-                    target_col
-                ].replace({True: 1, False: 0}, inplace=True)
-                print(self.dataset["train"][target_col][1:5])
-
-            if right_dtype == "Cat":
-                self.dataset["train"][target_col].convert_dtypes()
-
-            if right_dtype == "Datetime":
-                self.convert_dtype(target_col, right_dtype)
+            self.convert_dtype(target_col, right_dtype)
 
             info_df = get_meta_info(self.metaset, self.dataset)
             print(info_df)
-            answer = request_user_input(
-                "Are there more issues that need to be corrected? ( Y / n )",
-                valid_inputs=["Y", "N"],
-                valid_outputs=[True, False],
-                default="Y",
-            )
+            answer = ask_boolean("Are there any issues that need to be corrected?")
 
     def analize_dataset(self):
         metaset = self.metaset
@@ -127,23 +108,20 @@ class DataAnalyzer(object):
                 f"{col_meta['descript']}"
             )
 
-        self.config["options"]["FIX_COLUMN_INFO"] = request_user_input(
-            "Are there any issues that need to be corrected? ( Y / n )",
-            valid_inputs=["Y", "N"],
-            valid_outputs=[True, False],
-            default="Y",
-        )
+        answer = ask_boolean("Are there any issues that need to be corrected?")
+        self.config["options"]["FIX_COLUMN_INFO"] = answer
 
         if self.config["options"]["FIX_COLUMN_INFO"] is True:
             self.analize_feature()
 
     def analize_feature(self):
-        self.logger.log("- 1.1.+ : Check Data Features", level=2)
+        self.logger.log("- 2.2 : Check Data Features", level=2)
 
         for i, col in enumerate(self.metaset["__columns__"]):
             col_meta = self.metaset[col]
             col_data = self.dataset["train"][col]
-            show_meta_info(col_meta, col_data)
+            show_col_info(col_meta, col_data)
+            answer = ask_boolean("Are there any issues that need to be corrected?", default="N")
 
             # if min(col_data) >= 0:
             #     col_values = col_data.values
@@ -185,6 +163,8 @@ class DataAnalyzer(object):
     def convert_dtype(self, col, right_dtype):
         if right_dtype == "Datetime":
             self.convert_datetime(col)
+        elif right_dtype == "Category":
+            self.convert_category(col)
 
     def convert_datetime(self, col):
         self.dataset["train"][col] = pd.to_datetime(self.dataset["train"][col])
@@ -192,13 +172,7 @@ class DataAnalyzer(object):
             f"dtype changed : {self.metaset[col]['dtype']} to Datetime")
         self.metaset[col]["dtype"] = "Datetime"
 
-        answer = request_user_input(
-            "Do you want to split datetime? ( Y / n )",
-            valid_inputs=["Y", "N"],
-            valid_outputs=[True, False],
-            default="Y",
-        )
-
+        answer = ask_boolean("Do you want to split datetime?")
         if answer:
             metaset, trainset = self.metaset, self.dataset["train"]
 
@@ -211,7 +185,22 @@ class DataAnalyzer(object):
             self.metaset = metaset
             self.dataset["train"] = trainset
 
-    
+    def convert_category(self, col):
+        col_meta = self.metaset[col]
+        col_data = self.dataset["train"][col]
+
+        col_data = col_data.apply(str)
+        col_meta["log"].append(f"dtype changed : {col_meta['dtype']} to Category")
+        col_meta["dtype"] = "Category"
+
+        col_meta["stat"] = {
+            "unique": col_data.unique(),
+        }
+
+        self.metaset[col] = col_meta
+        self.dataset["train"][col] = col_data
+
+
     def get_meta_info(self, columns):
         info = list()
         for col in columns:
@@ -229,36 +218,13 @@ class DataAnalyzer(object):
         self.logger.log(f" - Dtype \n {info_df}\n\n", level=3)
         return info_df
 
-def show_col_info(col_meta, col_data):
-    print(
-        f"[{(col_meta['index']):3d}] \n"
-        f"<< {col_meta['name']} >> \n"
-        f" - {col_meta['descript']}"
+
+def ask_boolean(message, default="Y"):
+    message += "( Y / n )" if default == "Y" else "( y / N )"
+        
+    return request_user_input(
+        message,
+        valid_inputs=["Y", "N"],
+        valid_outputs=[True, False],
+        default=default,
     )
-
-    if col_meta["dtype"][:3] == "Num":
-        print(f" === Numerical stat === \n")
-        print(f" skew     : {col_meta['stat']['skew']} ") if col_meta["stat"].get(
-            "skew", None
-        ) else None
-        print(f" kurt     : {col_meta['stat']['kurt']} ") if col_meta["stat"].get(
-            "kurt", None
-        ) else None
-        print(
-            f" nunique  : {col_meta['nunique']} \n"
-            f" values  : {col_meta['stat']['unique'][:10]} ... \n"
-            f" na count : {col_meta['na_count']}"
-        )
-        print(col_data.describe(percentiles=[0.03, 0.25, 0.50, 0.75, 0.97]))
-    else:
-        print(
-            f" === Categorical stat === \n"
-            f" nunique  : {col_meta['nunique']} \n"
-            f" values   : {col_meta['stat']['unique']} \n"
-            f" na count : {col_meta['na_count']}"
-        )
-
-    for log in col_meta["log"]:
-        print(f" Log : {log}")
-
-    print()
