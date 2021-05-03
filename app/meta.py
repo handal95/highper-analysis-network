@@ -9,8 +9,8 @@ def init_set_info(config, dataset):
             distribution = round(values / length * 100, 3).to_frame(name=name)
             return distribution
         except:
-            # logger.warn(f"{name} set doesn't have {target}", level=3)
             return None
+
     trainset = dataset["train"]
     testset = dataset["test"]
 
@@ -44,15 +44,14 @@ def convert_dict(dtype):
     }[dtype.name]
     
 
-def init_col_info(metaset, col_data, col):
+def init_col_info(metaset, col_data, col_name):
     col_meta = {
-        "index": list(metaset["__columns__"]).index("datetime"),
-        "name": col,
+        "name": col_name,
         "dtype": str(col_data.dtype),
         "descript": None,
         "nunique": col_data.nunique(),
         "na_count": col_data.isna().sum(),
-        "target": (metaset["__target__"] == col),
+        "target": (metaset["__target__"] == col_name),
         "log": list(),
     }
 
@@ -70,7 +69,26 @@ def init_col_info(metaset, col_data, col):
         
     return col_meta
 
-def updata_set_info(metaset):
+def add_col_info(metaset, col_data, col_name, descript=None):
+    metaset["__ncolumns__"] = metaset["__ncolumns__"] + 1
+    metaset["__columns__"] = metaset["__columns__"].append(pd.Series(col_name))
+
+    print(metaset["__columns__"])
+
+    metaset[col_name] = {
+        "index": list(metaset["__columns__"]).index(col_name),
+        "name": col_name,
+        "dtype": str(col_data.dtype),
+        "descript": descript,
+        "nunique": col_data.nunique(),
+        "na_count": col_data.isna().sum(),
+        "target": False,
+        "log": list()
+    }
+    
+    return metaset, col_data
+
+def update_set_info(metaset):
     metaset["__target__"] = target
     return metaset
 

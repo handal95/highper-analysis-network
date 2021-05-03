@@ -4,7 +4,7 @@ from app.utils.command import request_user_input
 from app.utils.file import open_json
 from app.utils.logger import Logger
 from app.utils.eda import EDA
-
+from app.meta import add_col_info
 
 class DataAnalyzer(object):
     def __init__(self, config_path, dataset, metaset):
@@ -202,26 +202,16 @@ class DataAnalyzer(object):
         )
 
         if answer:
-            self.dataset["train"][f"{col}_year"] = self.dataset["train"][col].dt.year
-            self.dataset["train"][f"{col}_month"] = self.dataset["train"][col].dt.month
-            self.dataset["train"][f"{col}_day"] = self.dataset["train"][col].dt.day
-            self.dataset["train"][f"{col}_hour"] = self.dataset["train"][col].dt.hour
-            self.dataset["train"][f"{col}_min"] = self.dataset["train"][col].dt.minute
-            self.dataset["train"][f"{col}_sec"] = self.dataset["train"][col].dt.second
-            self.dataset["train"][f"{col}_dow"] = self.dataset["train"][col].dt.dayofweek
-            self.metaset["__ncolumns__"] = self.metaset["__ncolumns__"] + 1
-            self.metaset[f"{col}_year"] = {
-                "index": 12,
-                "name": f"{col}_year",
-                "dtype": str(self.dataset["train"][f"{col}_year"].dtype),
-                "descript": None,
-                "nunique": self.dataset["train"][f"{col}_year"].nunique(),
-                "na_count": self.dataset["train"][f"{col}_year"].isna().sum(),
-                "target": False,
-                "log": list()
-            }
-            print(self.metaset["__columns__"])
-            self.metaset["__columns__"] = self.metaset["__columns__"].append(pd.Series(f"{col}_year"))
+            metaset, trainset = self.metaset, self.dataset["train"]
+
+            metaset, trainset[f"{col}_year"]  = add_col_info(metaset, trainset[col].dt.year, f"{col}_year")
+            metaset, trainset[f"{col}_month"] = add_col_info(metaset, trainset[col].dt.month, f"{col}_month")
+            metaset, trainset[f"{col}_day"]   = add_col_info(metaset, trainset[col].dt.day, f"{col}_day")
+            metaset, trainset[f"{col}_hour"]  = add_col_info(metaset, trainset[col].dt.hour, f"{col}_hour")
+            metaset, trainset[f"{col}_dow"]   = add_col_info(metaset, trainset[col].dt.dayofweek, f"{col}_dow")
+
+            self.metaset = metaset
+            self.dataset["train"] = trainset
             print(self.metaset["__columns__"])
 
     
