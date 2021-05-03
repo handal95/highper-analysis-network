@@ -71,9 +71,8 @@ def init_col_info(metaset, col_data, col_name):
 
 def add_col_info(metaset, col_data, col_name, descript=None):
     metaset["__ncolumns__"] = metaset["__ncolumns__"] + 1
-    metaset["__columns__"] = metaset["__columns__"].append(pd.Series(col_name))
-
-    print(metaset["__columns__"])
+    metaset["__columns__"] = metaset["__columns__"].append(
+        pd.Series(col_name), ignore_index=True)
 
     metaset[col_name] = {
         "index": list(metaset["__columns__"]).index(col_name),
@@ -87,6 +86,24 @@ def add_col_info(metaset, col_data, col_name, descript=None):
     }
     
     return metaset, col_data
+
+def get_meta_info(metaset, dataset):
+    info = list()
+    for col in metaset["__columns__"]:
+        col_meta = metaset[col]
+        col_info = {
+            "name": col,
+            "dtype": col_meta["dtype"],
+            "desc": col_meta["descript"],
+        }
+        for i in range(1, 6):
+            col_info[f"sample{i}"] = dataset["train"][col][i]
+
+        info.append(col_info)
+
+    info_df = pd.DataFrame(info)
+    return info_df
+
 
 def update_set_info(metaset):
     metaset["__target__"] = target

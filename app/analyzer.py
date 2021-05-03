@@ -4,7 +4,7 @@ from app.utils.command import request_user_input
 from app.utils.file import open_json
 from app.utils.logger import Logger
 from app.utils.eda import EDA
-from app.meta import add_col_info
+from app.meta import add_col_info, get_meta_info
 
 class DataAnalyzer(object):
     def __init__(self, config_path, dataset, metaset):
@@ -46,8 +46,8 @@ class DataAnalyzer(object):
         self.logger.log(" - 2.1 Analize Dtype", level=2)
 
         # SHOW INFO
-        columns = self.metaset["__columns__"]
-        info_df = self.get_meta_info(columns)
+        info_df = get_meta_info(self.metaset, self.dataset)
+        print(info_df)
 
         # USER COMMAND
         answer = request_user_input(
@@ -60,7 +60,7 @@ class DataAnalyzer(object):
             target_index = int(
                 request_user_input(
                     f"Please enter the index of the target to be modified.",
-                    valid_inputs=range(len(columns)),
+                    valid_inputs=range(self.metaset["__ncolumns__"]),
                     skipable=True,
                     default=None,
                 )
@@ -69,8 +69,8 @@ class DataAnalyzer(object):
             if target_index is None:
                 break
 
-            target_col = columns[target_index]
-            self.logger.log(f"\n{info_df[info_df['name']==target_col]}")
+            self.logger.log(f"\n{info_df.loc[target_index]}")
+            target_col = self.metaset["__columns__"][target_index]
 
             right_dtype = request_user_input(
                 f"Please enter right dtype [num-int, num-float, bool, datetime]",
@@ -80,7 +80,7 @@ class DataAnalyzer(object):
             )
 
             print(f"you select dtype {right_dtype}")
-
+            
             if right_dtype == "Bool":
                 self.dataset["train"][target_col] = self.dataset["train"][
                     target_col
@@ -93,10 +93,8 @@ class DataAnalyzer(object):
             if right_dtype == "Datetime":
                 self.convert_dtype(target_col, right_dtype)
 
-            print(self.dataset["train"][target_col].dtype)
-
-            columns = self.metaset["__columns__"]
-            info_df = self.get_meta_info(columns)
+            info_df = get_meta_info(self.metaset, self.dataset)
+            print(info_df)
             answer = request_user_input(
                 "Are there more issues that need to be corrected? ( Y / n )",
                 valid_inputs=["Y", "N"],
@@ -145,7 +143,7 @@ class DataAnalyzer(object):
         for i, col in enumerate(self.metaset["__columns__"]):
             col_meta = self.metaset[col]
             col_data = self.dataset["train"][col]
-            print_meta_info(col_meta, col_data)
+            show_meta_info(col_meta, col_data)
 
             # if min(col_data) >= 0:
             #     col_values = col_data.values
@@ -208,11 +206,10 @@ class DataAnalyzer(object):
             metaset, trainset[f"{col}_month"] = add_col_info(metaset, trainset[col].dt.month, f"{col}_month")
             metaset, trainset[f"{col}_day"]   = add_col_info(metaset, trainset[col].dt.day, f"{col}_day")
             metaset, trainset[f"{col}_hour"]  = add_col_info(metaset, trainset[col].dt.hour, f"{col}_hour")
-            metaset, trainset[f"{col}_dow"]   = add_col_info(metaset, trainset[col].dt.dayofweek, f"{col}_dow")
+            metaset, trainset[f"{col}_dow"]   = add_col_info(metaset, trainset[col].dt.day_name(), f"{col}_dow")
 
             self.metaset = metaset
             self.dataset["train"] = trainset
-            print(self.metaset["__columns__"])
 
     
     def get_meta_info(self, columns):
@@ -232,7 +229,7 @@ class DataAnalyzer(object):
         self.logger.log(f" - Dtype \n {info_df}\n\n", level=3)
         return info_df
 
-def print_meta_info(col_meta, col_data):
+def show_col_info(col_meta, col_data):
     print(
         f"[{(col_meta['index']):3d}] \n"
         f"<< {col_meta['name']} >> \n"
