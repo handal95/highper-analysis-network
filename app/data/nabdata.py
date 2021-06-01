@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import json
 from sklearn import preprocessing
+from matplotlib import pyplot as plt
 
 
 class NabDataset(Dataset):
@@ -12,10 +13,11 @@ class NabDataset(Dataset):
         Args:
             data_settings (object): settings for loading data and preprocessing
         """
+
         self.train = data_settings.train
-        self.ano_span_count = (
-            0  # self.ano_span_count is updated when read_data() function is is called
-        )
+        # self.ano_span_count is updated 
+        #     when read_data() function is called
+        self.ano_span_count = 0
 
         df_x, df_y = self.read_data(
             data_file=data_settings.data_file,
@@ -25,6 +27,8 @@ class NabDataset(Dataset):
         )
 
         # select and standardize data
+        visualize(df_x)
+
         df_x = df_x[["value"]]
         df_x = self.normalize(df_x)
         df_x.columns = ["value"]
@@ -98,6 +102,7 @@ class NabDataset(Dataset):
         return df_x, pd.DataFrame(y)
 
     def normalize(self, df_x=None):
+
         min_max_scaler = preprocessing.StandardScaler()
         np_scaled = min_max_scaler.fit_transform(df_x)
         df_x = pd.DataFrame(np_scaled)
@@ -107,27 +112,68 @@ class NabDataset(Dataset):
 # settings for data loader
 class DataSettings:
     def __init__(self):
+        # D:\sangil\archive\realKnownCause\realKnownCause
         # location of datasets and category
-        end_name = "cpu_utilization_asg_misconfiguration.csv"  # dataset name
-        data_file = (
-            "data\\realKnownCause\\" + end_name
-        )  # dataset category and dataset name
-        key = (
-            "realKnownCause/" + end_name
-        )  # This key is used for reading anomaly labels
 
-        self.BASE = "D:\\ResearchDataGtx1060\\AnomalyDetectionData\\NabDataset\\"
+        # dataset name
+        end_name = "cpu_utilization_asg_misconfiguration.csv"
+        # dataset category and dataset name
+        # This key is used for reading anomaly labels
+
+        self.BASE = "D:\\sangil\\nabdata\\"
         self.label_file = "labels\\combined_windows.json"
-        self.data_file = data_file
-        self.key = key
+        self.data_file = "data\\realKnownCause\\" + end_name
+        self.key = "realKnownCause/" + end_name
         self.train = True
         self.window_length = 60
 
+
+def visualize(data):
+    fig = plt.figure(figsize=(20, 300))
+
+    y = data['value']
+    x = data['timestamp']
+
+    ax = fig.add_subplot(1, 1, 1)
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Data')
+    plt.setp(ax.get_xticklabels(), size=8)
+    ax.plot(x, y, 'b-', linewidth=2)
+
+    # for key1 in data:
+    #     print("key1 ", key1)
+    #     print("data[key1]", data[key1])
+        # print(data[key1][1])
+        # print(data[key1]['value'])
+        # for key2 in data[key1]:
+            # print(key2)
+            # num += 1
+            # y = data[key1][key2]['value']
+            # print(y)
+            # x = pd.to_datetime(data[key1][key2]['timestamp'])
+            
+            # ax = fig.add_subplot(csvs_num,1,num)
+            
+            # ax.title.set_text(key1+'/'+key2)
+            # ax.set_xlabel('Time')
+            # ax.set_ylabel('Data')
+            # plt.setp(ax.get_xticklabels(), size=8)
+            # ax.plot(x, y, 'b-', linewidth=2)
+            # i = 0
+            # while data[key1][key2]['interval'][i] != 0:
+            #     bold = data[key1][key2]['interval'][i]
+            #     ax.plot(x[bold], y[bold], 'r-', linewidth=1)
+            #     i += 1
+            # ax.scatter(x, y)
+
+    plt.grid()
+    plt.show()
 
 def main():
     data_settings = DataSettings()
     # define dataset object and data loader object for NAB dataset
     dataset = NabDataset(data_settings=data_settings)
+
     print(dataset.x.shape, dataset.y.shape)  # check the dataset shape
 
 
