@@ -41,9 +41,9 @@ def convert_dict(dtype):
         "Int64": "Num_int  ",
         "Float64": "Num_float",
         "object": "Cat     ",
-        "string": "string  "
+        "string": "string  ",
     }[dtype]
-    
+
 
 def init_col_info(metaset, col_data, col_name):
     col_meta = {
@@ -58,22 +58,23 @@ def init_col_info(metaset, col_data, col_name):
     }
 
     if col_meta["dtype"][:3] == "Cat":
-        col_meta["stat"] = {
-            "unique": col_data.unique(),
-        }
+        col_meta["unique"] = (col_data.unique(),)
+        col_meta["rate"] = (col_data.value_counts(),)
     elif col_meta["dtype"] == "Int64" or col_meta["dtype"] == "Float64":
         col_meta["stat"] = {
             "skew": round(col_data.skew(), 4),
             "kurt": round(col_data.kurt(), 4),
             "unique": col_data.unique(),
         }
-        
+
     return col_meta
+
 
 def add_col_info(metaset, col_data, col_name, descript=None):
     metaset["__ncolumns__"] = metaset["__ncolumns__"] + 1
     metaset["__columns__"] = metaset["__columns__"].append(
-        pd.Series(col_name), ignore_index=True)
+        pd.Series(col_name), ignore_index=True
+    )
 
     metaset[col_name] = {
         "index": list(metaset["__columns__"]).index(col_name),
@@ -83,10 +84,11 @@ def add_col_info(metaset, col_data, col_name, descript=None):
         "nunique": col_data.nunique(),
         "na_count": col_data.isna().sum(),
         "target": False,
-        "log": list()
+        "log": list(),
     }
-    
+
     return metaset, col_data
+
 
 def get_meta_info(metaset, dataset):
     info = list()
@@ -118,10 +120,12 @@ def show_col_info(col_meta, col_data):
         print(
             f" === datetime stat === \n"
             f" nunique  : {col_meta['nunique']} \n"
-            f" na count : {col_meta['na_count']} \n" 
+            f" na count : {col_meta['na_count']} \n"
             f" min value: {min(col_data)} \n"
             f" max value: {max(col_data)} \n"
         )
+        if col_meta["nunique"] <= 10:
+            print()
 
     elif col_meta["dtype"][:3] == "Num":
         print(
@@ -129,20 +133,32 @@ def show_col_info(col_meta, col_data):
             f" nunique  : {col_meta['nunique']} \n"
             f" na count : {col_meta['na_count']} \n"
         )
-        if col_meta.get('stat') is not None:
+        if col_meta.get("stat") is not None:
             print(
                 f" skew     : {col_meta['stat'].get('skew', None)} \n"
                 f" kurt     : {col_meta['stat'].get('kurt', None)} \n"
                 f" values   : {col_meta['stat']['unique'][:10]} ... \n"
             )
         print(col_data.describe(percentiles=[0.03, 0.25, 0.50, 0.75, 0.97]))
-    else:
+
+    elif col_meta["dtype"] == "Boolean":
+        print(
+            f" === Boolean stat === \n"
+            f" nunique   : {col_meta['nunique']} \n"
+            f" na count  : {col_meta['na_count']} \n"
+            f" true  rate: {col_meta['rate'][0]} \n"
+            f" false rate: {col_meta['rate'][1]} \n"
+        )
+
+    elif col_meta["dtype"] == "Category":
         print(
             f" === Categorical stat === \n"
             f" nunique  : {col_meta['nunique']} \n"
-            f" values   : {col_meta['stat']['unique']} \n"
-            f" na count : {col_meta['na_count']}"
+            f" unique   : {col_meta['unique']} \n"
+            f" na count : {col_meta['na_count']} \n"
         )
+        for value in col_meta["rate"]:
+            print(f" values   : {value}")
 
     for log in col_meta["log"]:
         print(f" Log : {log}")
@@ -153,6 +169,7 @@ def show_col_info(col_meta, col_data):
 def update_set_info(metaset):
     metaset["__target__"] = target
     return metaset
+
 
 def update_col_info(metaset, col_data):
     col_meta = {

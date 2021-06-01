@@ -33,7 +33,8 @@ class DataLoader(object):
         1.1 Data Loading
         """
         self.logger.log(
-            f"- 1.1 {self.config['dataset']['category']} type dataset loading .. ", level=2
+            f"- 1.1 {self.config['dataset']['category']} type dataset loading .. ",
+            level=2,
         )
 
         self.filepath = os.path.join(self.basepath, self.filepath)
@@ -102,7 +103,6 @@ class DataLoader(object):
             col_data = self.dataset["train"][col].convert_dtypes()
             metaset[col] = init_col_info(metaset, col_data, col)
 
-
         return metaset
 
     def read_description(self, metaset):
@@ -115,7 +115,7 @@ class DataLoader(object):
             self.config["dataset"]["filepath"],
             descfile,
         )
-        
+
         try:
             with open(descpath, "r", newline="\r\n") as desc_file:
                 self.logger.log(f"- '{descpath}' is now loaded", level=3)

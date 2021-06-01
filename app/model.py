@@ -70,7 +70,7 @@ class ModelGenerator(object):
             "ENet": model_ENet,
             "GBoost": model_GBoost,
             "XGBoost": model_XGB,
-            "LogReg": model_logistic
+            "LogReg": model_logistic,
         }
 
         return models

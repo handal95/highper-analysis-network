@@ -6,6 +6,7 @@ from app.utils.logger import Logger
 from app.utils.eda import EDA
 from app.meta import add_col_info, get_meta_info, show_col_info, update_col_info
 
+
 class DataAnalyzer(object):
     def __init__(self, config_path, dataset, metaset):
         self.config = open_json(config_path)
@@ -29,7 +30,6 @@ class DataAnalyzer(object):
             f" Total Columns num   : {metaset['__ncolumns__']}  \n"
             f" Target label        : {metaset['__target__']} \n"
             f" Target dtype        : {dataset['train'][metaset['__target__']].dtype} \n"
-            # " Label Distribution  :\n{metaset['__distribution__']} \n"
         )
 
         self.eda.countplot(
@@ -47,40 +47,26 @@ class DataAnalyzer(object):
         self.logger.log(" - 2.1 Analize Dtype", level=2)
 
         # SHOW INFO
-        info_df = get_meta_info(self.metaset, self.dataset)
-        print(info_df)
+        print(get_meta_info(self.metaset, self.dataset))
 
         # USER COMMAND
         answer = ask_boolean("Are there any issues that need to be corrected?")
 
         while answer:
-            target_index = int(
-                request_user_input(
-                    f"Please enter the index of the target to be modified.",
-                    valid_inputs=range(self.metaset["__ncolumns__"]),
-                    skipable=True,
-                    default=None,
-                )
+            target_index = request_user_input(
+                f"Please enter the index of the target to be modified.",
+                valid_inputs=range(self.metaset["__ncolumns__"]),
+                skipable=True,
+                default=None,
             )
 
             if target_index is None:
                 break
 
-            self.logger.log(f"\n{info_df.loc[target_index]}")
-            target_col = self.metaset["__columns__"][target_index]
+            target_col = self.metaset["__columns__"][int(target_index)]
+            self.convert_dtype(target_col)
 
-            right_dtype = request_user_input(
-                f"Please enter right dtype [num-int, num-float, bool, category, datetime]",
-                valid_inputs=["num-int", "num-float", "bool", "category", "datetime"],
-                skipable=True,
-                default=None,
-            )
-
-            print(f"you select dtype {right_dtype}")
-            self.convert_dtype(target_col, right_dtype)
-
-            info_df = get_meta_info(self.metaset, self.dataset)
-            print(info_df)
+            print(get_meta_info(self.metaset, self.dataset))
             answer = ask_boolean("Are there any issues that need to be corrected?")
 
     def analize_dataset(self):
@@ -121,66 +107,72 @@ class DataAnalyzer(object):
             col_meta = self.metaset[col]
             col_data = self.dataset["train"][col]
             show_col_info(col_meta, col_data)
-            answer = ask_boolean("Are there any issues that need to be corrected?", default="N")
+            answer = ask_boolean(
+                "Are there any issues that need to be corrected?", default="N"
+            )
 
-            # if min(col_data) >= 0:
-            #     col_values = col_data.values
-            #     log_values = np.log1p(col_values)
-            #     sqrt_values = np.sqrt(col_values)
+            while answer:
+                target = request_user_input(
+                    f"Please enter issue [none, dtype]",
+                    valid_inputs=["dtype"],
+                    skipable=True,
+                    default=None,
+                )
 
-            #     fig, ax = plt.subplots(1, 3, figsize=(15, 4))
+                if target == "Dtype":
+                    self.convert_dtype(col)
+                show_col_info(col_meta, col_data)
+                answer = ask_boolean(
+                    "Are there any issues that need to be corrected?", default="N"
+                )
 
-            #     sns.histplot(col_values, ax=ax[0], color='r')
-            #     ax[0].set_xlim([min(col_values), max(col_values)])
-
-            #     sns.histplot(log_values, ax=ax[1], color='r')
-            #     ax[1].set_xlim([min(log_values), max(log_values)])
-
-            #     sns.histplot(sqrt_values, ax=ax[2], color='r')
-            #     ax[2].set_xlim([min(sqrt_values), max(sqrt_values)])
-            #     plt.show()
-
-            # if col_meta['dtype'][:3] == 'Num':
-            #     dataset = convert_scale_domain(config, info, dataset, metaset)
-
-            # # if info['dtype'][:3] == 'Cat':
-            # #     dataset = convert_score_domain(info, dataset, metaset)
-
-            # answer = request_user_input()
-
-            # if answer:
-            #     change_options = request_user_input(
-            #         "how do you want to change this column ( [b:Bool, s:score] )",
-            #         valid_inputs=['b', 's'], valid_outputs=['b', 's'], default='N'
-            #     )
-            #     if change_options == 'b':
-            #         convert_boolean_domain(col, dataset)
-            #     elif change_options == 's':
-            #         convert_score_domain(col, dataset)
+        print(get_meta_info(self.metaset, self.dataset))
 
         return self.dataset
 
-    def convert_dtype(self, col, right_dtype):
+    def convert_dtype(self, col):
+        right_dtype = request_user_input(
+            f"Please enter right dtype [num-int, num-float, bool, category, datetime]",
+            valid_inputs=["num-int", "num-float", "bool", "category", "datetime"],
+            skipable=True,
+            default=None,
+        )
+
+        print(f"you select dtype {right_dtype}")
+
         if right_dtype == "Datetime":
             self.convert_datetime(col)
         elif right_dtype == "Category":
             self.convert_category(col)
+        elif right_dtype == "Bool":
+            self.convert_boolean(col)
 
     def convert_datetime(self, col):
         self.dataset["train"][col] = pd.to_datetime(self.dataset["train"][col])
         self.metaset[col]["log"].append(
-            f"dtype changed : {self.metaset[col]['dtype']} to Datetime")
+            f"dtype changed : {self.metaset[col]['dtype']} to Datetime"
+        )
         self.metaset[col]["dtype"] = "Datetime"
 
         answer = ask_boolean("Do you want to split datetime?")
         if answer:
             metaset, trainset = self.metaset, self.dataset["train"]
 
-            metaset, trainset[f"{col}_year"]  = add_col_info(metaset, trainset[col].dt.year, f"{col}_year")
-            metaset, trainset[f"{col}_month"] = add_col_info(metaset, trainset[col].dt.month, f"{col}_month")
-            metaset, trainset[f"{col}_day"]   = add_col_info(metaset, trainset[col].dt.day, f"{col}_day")
-            metaset, trainset[f"{col}_hour"]  = add_col_info(metaset, trainset[col].dt.hour, f"{col}_hour")
-            metaset, trainset[f"{col}_dow"]   = add_col_info(metaset, trainset[col].dt.day_name(), f"{col}_dow")
+            metaset, trainset[f"{col}_year"] = add_col_info(
+                metaset, trainset[col].dt.year, f"{col}_year"
+            )
+            metaset, trainset[f"{col}_month"] = add_col_info(
+                metaset, trainset[col].dt.month, f"{col}_month"
+            )
+            metaset, trainset[f"{col}_day"] = add_col_info(
+                metaset, trainset[col].dt.day, f"{col}_day"
+            )
+            metaset, trainset[f"{col}_hour"] = add_col_info(
+                metaset, trainset[col].dt.hour, f"{col}_hour"
+            )
+            metaset, trainset[f"{col}_dow"] = add_col_info(
+                metaset, trainset[col].dt.day_name(), f"{col}_dow"
+            )
 
             self.metaset = metaset
             self.dataset["train"] = trainset
@@ -193,13 +185,24 @@ class DataAnalyzer(object):
         col_meta["log"].append(f"dtype changed : {col_meta['dtype']} to Category")
         col_meta["dtype"] = "Category"
 
-        col_meta["stat"] = {
-            "unique": col_data.unique(),
-        }
+        col_meta["unique"] = col_data.unique()
+        col_meta["rate"] = (col_data.value_counts(),)
 
         self.metaset[col] = col_meta
         self.dataset["train"][col] = col_data
 
+    def convert_boolean(self, col):
+        col_meta = self.metaset[col]
+        col_data = self.dataset["train"][col]
+
+        col_data = col_data.apply(str)
+        col_meta["log"].append(f"dtype changed : {col_meta['dtype']} to Boolean")
+        col_meta["dtype"] = "Boolean"
+
+        col_meta["rate"] = col_data.value_counts()
+
+        self.metaset[col] = col_meta
+        self.dataset["train"][col] = col_data
 
     def get_meta_info(self, columns):
         info = list()
@@ -221,7 +224,7 @@ class DataAnalyzer(object):
 
 def ask_boolean(message, default="Y"):
     message += "( Y / n )" if default == "Y" else "( y / N )"
-        
+
     return request_user_input(
         message,
         valid_inputs=["Y", "N"],
