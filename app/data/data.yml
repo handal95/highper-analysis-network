@@ -1,0 +1,9 @@
+data:
+    train: True
+    window_length: 60
+
+    BASE: "D:\\sangil\\nabdata\\"
+    end_name: "cpu_utilization_asg_misconfiguration.csv"
+    label: "labels\\combined_windows.json"
+    data: "data\\realKnownCause\\"
+    key: "realKnownCause/"

@@ -1,11 +1,13 @@
 import torch
 from torch.utils.data import Dataset
 import pandas as pd
+import yaml
+import argparse
 import numpy as np
 import json
 from sklearn import preprocessing
 from matplotlib import pyplot as plt
-
+from data_setting import DataSettings
 
 class NabDataset(Dataset):
     def __init__(self, data_settings):
@@ -109,25 +111,6 @@ class NabDataset(Dataset):
         return df_x
 
 
-# settings for data loader
-class DataSettings:
-    def __init__(self):
-        # D:\sangil\archive\realKnownCause\realKnownCause
-        # location of datasets and category
-
-        # dataset name
-        end_name = "cpu_utilization_asg_misconfiguration.csv"
-        # dataset category and dataset name
-        # This key is used for reading anomaly labels
-
-        self.BASE = "D:\\sangil\\nabdata\\"
-        self.label_file = "labels\\combined_windows.json"
-        self.data_file = "data\\realKnownCause\\" + end_name
-        self.key = "realKnownCause/" + end_name
-        self.train = True
-        self.window_length = 60
-
-
 def visualize(data):
     fig = plt.figure(figsize=(20, 300))
 
@@ -169,8 +152,9 @@ def visualize(data):
     plt.grid()
     plt.show()
 
-def main():
-    data_settings = DataSettings()
+def main(opt):
+    data_settings = DataSettings(opt)
+
     # define dataset object and data loader object for NAB dataset
     dataset = NabDataset(data_settings=data_settings)
 
@@ -178,4 +162,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Argument options
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data", type=str, default="data.yml", help="data.yml path"
+    )
+    opt = parser.parse_args()
+
+    main(opt)
