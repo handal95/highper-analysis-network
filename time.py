@@ -2,7 +2,7 @@ import pandas as pd
 import plotly
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-from app.utils.file import open_csv
+from model.utils.file import open_csv
 
 
 def main():

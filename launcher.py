@@ -1,12 +1,12 @@
 import argparse
 
-# from app.run import run
-from app.utils.logger import Logger, init_logger
-from app.data.prepare import prepare_data
-from app.loader import DataLoader
-from app.analyzer import DataAnalyzer
-from app.model import ModelGenerator
-from app.preprocessor import PreProcessor
+# from model.run import run
+from model.utils.logger import Logger, init_logger
+from model.data.prepare import prepare_data
+from model.loader import DataLoader
+from model.analyzer import DataAnalyzer
+from model.model import ModelGenerator
+from model.preprocessor import PreProcessor
 
 
 argparser = argparse.ArgumentParser(description="cli command")

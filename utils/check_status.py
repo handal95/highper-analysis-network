@@ -70,7 +70,6 @@ def check_git_status():
             )
         else:
             s = f"up to date with {url} ✅"
-        print(emojis(s))  # emoji-safe
     except Exception as e:
         print(e)
 

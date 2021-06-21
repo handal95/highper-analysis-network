@@ -1,0 +1,11 @@
+data:
+    train: True
+    window_length: 60
+
+    BASE: "C:\\Users\\Handal\\github\\hiper-analysis-network\\timeseries\\data\\"
+    end_name: "ambient_temperature_system_failure.csv"
+    label: "labels\\combined_windows.json"
+    data: "data\\realKnownCause\\"
+    key: "realKnownCause/"
+
+    visualize: False
