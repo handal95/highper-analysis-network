@@ -1,6 +1,6 @@
 data:
     train: True
-    window_length: 60
+    window_length: 4
 
     BASE: "C:\\Users\\Handal\\github\\hiper-analysis-network\\timeseries\\data\\"
     end_name: "ambient_temperature_system_failure.csv"
@@ -9,3 +9,18 @@ data:
     key: "realKnownCause/"
 
     visualize: False
+    fill_timegap : True
+
+
+args:
+    train:
+        workers: 4
+        batch_size: 4
+        epochs: 1
+        lr: 0.0002
+        cuda: True
+        manualSeed: 31
+
+    test:
+        workers: 4
+        batch_size: 4
