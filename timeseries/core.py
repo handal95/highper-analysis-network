@@ -19,9 +19,9 @@ import numpy as np
 from sklearn.metrics import cohen_kappa_score
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 
-def main(opt):
+def main(args):
     print("Setting data")
-    data_settings = DataSettings(opt.data)
+    data_settings = DataSettings(args.data)
 
     print("Prepare dataset")
     # define dataset object and data loader object for NAB dataset
@@ -29,8 +29,8 @@ def main(opt):
     dataset_test = NabDataset(data_settings=data_settings)
 
     print("training option")
-    opt_trn= Args(opt.data, train=True)
-    opt_test= Args(opt.data, train=False)
+    opt_trn= Args(args.data, train=True)
+    opt_test= Args(args.data, train=False)
 
     dataloader = torch.utils.data.DataLoader(
         dataset_trn, batch_size=opt_trn.batch_size,
@@ -264,8 +264,4 @@ def main(opt):
     
 if __name__ == "__main__":
     # Argument options
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, default="config/data_config.yml", help="data.yml path")
-    opt = parser.parse_args()
-
-    main(opt)
+    main(Args().args)
