@@ -1,14 +1,16 @@
-from numpy.core.numeric import full
+import os
+from torch.utils import data
+import os
 import yaml
-from torch.utils.data import Dataset
-import numpy as np
 import json
+import torch
+import numpy as np
+import pandas as pd
+import matplotlib.animation as animation
+
 from sklearn import preprocessing
 from matplotlib import pyplot as plt
-import pandas as pd
-import torch
-from pathlib import Path
-import matplotlib.animation as animation
+from torch.utils.data import Dataset
 
 
 class DataSettings:
@@ -28,72 +30,57 @@ class DataSettings:
         self.vis_opt = config["visualize"]
         self.gap_opt = config["fill_timegap"]
 
+    def load_ano_file(self):
+        file = os.path.join(self.BASE, self.label_file)
+
+        with open(file) as f:
+            json_label = json.load(f)
+
+        return json_label[self.key]
+    
+    def load_csv_file(self):
+        file = os.path.join(self.BASE, self.data_file)
+
+        return pd.read_csv(file)
+        
+        
 class NabDataset(Dataset):
-    def __init__(self, data_settings):
+    def __init__(self, settings):
         """
         Args:
-            data_settings (object): settings for loading data and preprocessing
+            settings (object): settings for loading data and preprocessing
         """
 
-        self.dataset = data_settings.end_name
-        self.train = data_settings.train
-        self.gap_opt = data_settings.gap_opt
-        # self.ano_span_count is updated
-        #     when read_data() function is called
-        self.ano_span_count = 0
-        self.window_length = data_settings.window_length
-
-        df_x, df_y = self.read_data(
-            data_file=data_settings.data_file,
-            label_file=data_settings.label_file,
-            key=data_settings.key,
-            BASE=data_settings.BASE,
-        )
-
-        # select and standardize data
-        # if data_settings.vis_opt:
-        #     self.visualize(df_x, df_y)
-
-        df_times = df_x["timestamp"]
-        df_x = df_x[["value"]]
-        df_x = self.normalize(df_x)
-        df_x.columns = ["value"]
-
-        df_x = df_x[:256]
-        df_y = df_y[:256]
+        self.ano_spans = settings.load_ano_file()
+        self.ano_count = len(self.ano_spans)
         
-        if data_settings.vis_opt and self.train:
-            self.normalized_visualize(df_times, df_x, df_y)
+        self.train = settings.train
+        self.gap_opt = settings.gap_opt
+        self.window_length = settings.window_length
+        self.stride = 1 if settings.train else self.window_length
 
+        df = settings.load_csv_file()
+        df['timestamp'] = pd.to_datetime(df["timestamp"], dayfirst=True)
+        df = df.set_index("timestamp")
 
-        # important parameters
-        # self.window_length = int(len(df_x)*0.1/self.ano_span_count)
-        if data_settings.train:
-            self.stride = 1
-        else:
-            self.stride = self.window_length
+        data = torch.from_numpy(np.expand_dims(np.array([group[1] for group in df.value.groupby(df.index.date)]), -1)).float()
+        self.data = self.normalize(data)
+        self.data_len = data.size(1)
+        self.in_dim = len(df.columns)
 
-        self.n_feature = len(df_x.columns)
-
-        # x, y data
-        x = df_x
-        y = df_y
-
-        # adapt the datasets for the sequence data shape
-        x, y = self.unroll(x, y)
-
-        self.x = torch.from_numpy(x).float()
-        self.y = torch.from_numpy(
-            np.array([1 if sum(y_i) > 0 else 0 for y_i in y])
-        ).float()
-
-        self.data_len = x.shape[0]
-
+        original_deltas = data[:, -1] - data[:, 0]
+        self.original_deltas = original_deltas
+        self.or_delta_max, self.or_delta_min = original_deltas.max(), original_deltas.min() 
+        deltas = self.data[:, -1] - self.data[:, 0]     
+        self.deltas = deltas
+        self.delta_mean, self.delta_std = deltas.mean(), deltas.std()
+        self.delta_max, self.delta_min = deltas.max(), deltas.min()
+            
     def __len__(self):
         return self.data_len
 
     def __getitem__(self, idx):
-        return self.x[idx], self.y[idx]
+        return self.data[idx]
 
     # create sequences
     def unroll(self, data, labels):
@@ -107,196 +94,44 @@ class NabDataset(Dataset):
             un_data.append(data.iloc[idx : idx + seq_len].values)
             un_labels.append(labels.iloc[idx : idx + seq_len].values)
             idx += stride
+
         return np.array(un_data), np.array(un_labels)
 
-    def read_data(self, data_file=None, label_file=None, key=None, BASE=""):
-        with open(BASE + label_file) as FI:
-            j_label = json.load(FI)
-        ano_spans = j_label[key]
-        self.ano_span_count = len(ano_spans)
-        df_x = pd.read_csv(BASE + data_file)
-        df_x["timestamp"] = pd.to_datetime(df_x["timestamp"])
-
-        if self.gap_opt:
-            df_x, gap_y = self.fill_timegap(df_x)
-            # df_x.to_csv("./fill_timegap.csv")
-
-        df_x, df_y = self.assign_ano(ano_spans, df_x)
-        
-        if self.gap_opt:
-            df_y = self.fill_anogap(df_y, gap_y)
-            
-        return df_x, df_y
-
-    def assign_ano(self, ano_spans=None, df_x=None):
+    def assign_ano(self, df_x=None):
         y = np.zeros(len(df_x))
-        for ano_span in ano_spans:
+
+        for ano_span in self.ano_spans:
             ano_start = pd.to_datetime(ano_span[0])
             ano_end = pd.to_datetime(ano_span[1])
+
             for idx in df_x.index:
                 if (
                     df_x.loc[idx, "timestamp"] >= ano_start
                     and df_x.loc[idx, "timestamp"] <= ano_end
                 ):
                     y[idx] = 1.0
-                
-        return df_x, pd.DataFrame(y)
 
-    def normalize(self, df_x=None):
+        df_y = pd.DataFrame(y)
 
-        min_max_scaler = preprocessing.StandardScaler()
-        np_scaled = min_max_scaler.fit_transform(df_x)
-        df_x = pd.DataFrame(np_scaled)
-        return df_x
+        return df_x, df_y
 
-
-    def fill_timegap(self, df_x):
-        TIMEGAP = df_x["timestamp"][1] - df_x["timestamp"][0]
-
-        new_df_x = pd.DataFrame()
-        gap_y = list()
-
-        for i in range(df_x.shape[0] - 1):
-            timegap = df_x["timestamp"][i+1] - df_x["timestamp"][i]
-            if timegap != TIMEGAP:
-                for gap in range(timegap//TIMEGAP):
-                    new_row = {
-                        "timestamp": df_x["timestamp"][i] + gap * TIMEGAP,
-                        "value": df_x["value"][i]
-                    }
-                    gap_y.append(len(new_df_x))
-                    new_df_x = new_df_x.append(new_row, ignore_index=True)
-            else:
-                new_df_x = new_df_x.append(
-                    df_x.iloc[i], ignore_index=True)
-        return new_df_x, gap_y
+    def normalize(self, x):
+        """Normalize input in [-1,1] range, saving statics for denormalization"""
+        self.max = x.max()
+        self.min = x.min()
+        
+        return (2 * (x - x.min())/(x.max() - x.min()) - 1)
     
-    def fill_anogap(self, df_y, gap_y=None):
-        for gap in gap_y:
-            df_y.loc[gap] = 1.0
-        
-        return df_y
-        
-
-    def visualize(self, data, ano):
-        fig = plt.figure(figsize=(10, 10))
-        plt.ion()
-
-        y = data["value"]
-        x = data["timestamp"]
-
-        fulldata_x = x.values.reshape(1, -1)
-        fulldata_y = y.values.reshape(1, -1)
-        fullanomal = ano.values.reshape(1, -1)
-        
-        time_pivot = 240
-
-        data_x = fulldata_x[:, :time_pivot]
-        data_y = fulldata_y[:, :time_pivot]
-        ano_y = fullanomal[:, :time_pivot]
-        
-        fig = plt.figure(figsize=(16, 8))
-        ax = plt.subplot(111, frameon=False)
-        plt.grid(True)
-
-        lines = []
-        for i in range(fulldata_x.shape[0]):
-            lw = 1 - 2 * i / 20.0
-            line, = ax.plot(data_x[i], data_y[i], "b-", color="k", lw=lw)
-            lines.append(line)
-            
-        ax.set_xlabel("Time")
-        ax.set_ylabel("Data")
-        ax.text(0.4, 1.0, self.dataset, transform=ax.transAxes, ha="right", va="bottom", color="k", 
-                family="sans-serif", fontweight="bold", fontsize=16)
-        ax.set_title("normal", loc="right", color="b", fontsize=16)
-
-        def update(*args):
-            fulldata_x[:, :-1] = fulldata_x[:, 1:]
-            fulldata_y[0, :-1] = fulldata_y[:, 1:]
-            fullanomal[:, :-1] = fullanomal[:, 1:]
-
-            data_x[:, :] = fulldata_x[:, :time_pivot]
-            data_y[:, :] = fulldata_y[:, :time_pivot]
-            ano_y[:, :] = fullanomal[:, :time_pivot]
-            
-            if data_x[:, -1] == fulldata_x[:, -1]:
-                plt.clf()
-                plt.close()
-
-            for i in range(len(data_y)):
-                convert = ano_y[:, -2] - ano_y[:, -1] 
-                if convert > 0:
-                    ax.set_title("normal", loc="right", color="b", fontsize=16)
-                elif convert < 0:
-                    ax.set_title("Anomalies Detected", loc="right", color="r", fontweight="bold", fontsize=16)
-                    
-                lines[i].set_xdata(data_x[i])
-                lines[i].set_ydata(data_y[i])
-                ax.relim()
-                ax.autoscale_view()
-
-        anim = animation.FuncAnimation(fig, update, interval=1)
-        
-
-    def normalized_visualize(self, time, value, ano):
-        fig = plt.figure(figsize=(10, 10))
-        plt.ion()
-
-        y = value
-        x = time
-
-        fulldata_x = x.values.reshape(1, -1)
-        fulldata_y = y.values.reshape(1, -1)
-        fullanomal = ano.values.reshape(1, -1)
-        
-        time_pivot = 240
-
-        data_x = fulldata_x[:, :time_pivot]
-        data_y = fulldata_y[:, :time_pivot]
-        ano_y = fullanomal[:, :time_pivot]
-        
-        fig = plt.figure(figsize=(16, 8))
-        ax = plt.subplot(111, frameon=False)
-        plt.grid(True)
-
-        lines = []
-        for i in range(fulldata_x.shape[0]):
-            lw = 1 - 2 * i / 20.0
-            line, = ax.plot(data_x[i], data_y[i], "b-", color="k", lw=lw)
-            lines.append(line)
-
-        plt.ylim([-3, 3])
-        ax.set_xlabel("Time")
-        ax.set_ylabel("Data")
-        ax.text(0.4, 1.0, self.dataset, transform=ax.transAxes, ha="right", va="bottom", color="k", 
-                family="sans-serif", fontweight="bold", fontsize=16)
-        ax.set_title("normal", loc="right", color="b", fontsize=16)
-
-        def update(*args):
-            fulldata_x[:, :-1] = fulldata_x[:, 1:]
-            fulldata_y[0, :-1] = fulldata_y[:, 1:]
-            fullanomal[:, :-1] = fullanomal[:, 1:]
-
-            data_x[:, :] = fulldata_x[:, :time_pivot]
-            data_y[:, :] = fulldata_y[:, :time_pivot]
-            ano_y[:, :] = fullanomal[:, :time_pivot]
-            
-            if data_x[:, -1] == fulldata_x[:, -1]:
-                plt.clf()
-                plt.close()
-
-            for i in range(len(data_y)):
-                convert = ano_y[:, -2] - ano_y[:, -1] 
-                if convert > 0:
-                    ax.set_title("normal", loc="right", color="b", fontsize=16)
-                elif convert < 0:
-                    ax.set_title("Anomalies Detected", loc="right", color="r", fontweight="bold", fontsize=16)
-                    
-                lines[i].set_xdata(data_x[i])
-                lines[i].set_ydata(data_y[i])
-
-                ax.relim()
-                ax.autoscale_view()
-        anim = animation.FuncAnimation(fig, update, interval=1)
-        input()
+    def denormalize(self, x):
+        """Revert [-1,1] normalization"""
+        if not hasattr(self, 'max') or not hasattr(self, 'min'):
+            raise Exception("You are calling denormalize, but the input was not normalized")
+        return 0.5 * (x*self.max - x*self.min + self.max + self.min)
+    
+    def sample_deltas(self, number):
+        """Sample a vector of (number) deltas from the fitted Gaussian"""
+        return (torch.randn(number, 1) + self.delta_mean) * self.delta_std
+    
+    def normalize_deltas(self, x):
+        return ((self.delta_max - self.delta_min) * (x - self.or_delta_min)/(self.or_delta_max - self.or_delta_min) + self.delta_min)
+    
