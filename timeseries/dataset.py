@@ -63,7 +63,9 @@ class NabDataset(Dataset):
         df['timestamp'] = pd.to_datetime(df["timestamp"], dayfirst=True)
         df = df.set_index("timestamp")
 
+        self.date = [group[0] for group in df.value.groupby(df.index.date)]
         data = torch.from_numpy(np.expand_dims(np.array([group[1] for group in df.value.groupby(df.index.date)]), -1)).float()
+        
         self.data = self.normalize(data)
         self.data_len = data.size(1)
         self.in_dim = len(df.columns)
@@ -81,6 +83,15 @@ class NabDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.data[idx]
+    
+    def get_prev(self, idx):
+        if idx == 0:
+            return self.data[idx]
+
+        return self.data[idx - 1]
+    
+    def get_dayofweek(self, idx):
+        return self.date[idx].weekday()
 
     # create sequences
     def unroll(self, data, labels):
