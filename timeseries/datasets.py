@@ -40,46 +40,42 @@ class DataSettings:
 
     def load_csv_file(self):
         file = os.path.join(self.BASE, self.data_file)
+        data = pd.read_csv(file)
+        data = data.set_index("timestamp")
 
-        return pd.read_csv(file)
+        return data
 
 
-class NabDataset(Dataset):
+class Dataset(Dataset):
     def __init__(self, settings):
         """
         Args:
             settings (object): settings for loading data and preprocessing
         """
-
-        self.ano_spans = settings.load_ano_file()
-        self.ano_count = len(self.ano_spans)
-
         self.train = settings.train
         self.gap_opt = settings.gap_opt
-        self.window_length = settings.window_length
+        self.seq_len = settings.window_length
         self.stride = 1
 
-        df = settings.load_csv_file()
-        df["timestamp"] = pd.to_datetime(df["timestamp"], dayfirst=True)
-        df = df.set_index("timestamp")
+        data = settings.load_csv_file()
+        self.times = self.store_times(data)
 
-        df = self.unroll(df[["value"]])
+        data = self.windowing(data[["value"]])
         self.n_feature = 1
-        self.data = torch.from_numpy(df).float()
+        self.data = torch.from_numpy(data).float()
         self.data = self.normalize(self.data)
 
         self.data_len = self.data.shape[0]
 
-    def unroll(self, data):
-        un_data = []
-        seq_len = int(self.window_length)
-        stride = int(self.stride)
+    def _preprocessing(self, data):
+        return data
 
-        idx = 0
-        while idx < len(data) - seq_len:
-            un_data.append(data[idx : idx + seq_len])
-            idx += stride
-        return np.array(un_data)
+    def store_times(self, data):
+        return pd.to_datetime(data.index, dayfirst=True)
+
+    def windowing(self, x):
+        stop = len(x) - self.seq_len
+        return np.array([x[i : i + self.seq_len] for i in range(0, stop, self.stride)])
 
     def __len__(self):
         return self.data_len

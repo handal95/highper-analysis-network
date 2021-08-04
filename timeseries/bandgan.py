@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from utils.loss import GANLoss
 
+
 class BandGan:
     def __init__(
         self,
@@ -14,7 +15,7 @@ class BandGan:
         netG,
         optimD,
         optimG,
-        critic_iter=5
+        critic_iter=5,
     ):
         print("init")
         self.critic_iter = critic_iter
@@ -23,23 +24,28 @@ class BandGan:
         self.in_dim = in_dim
         self.device = device
         self.dataloader = dataloader
-        self.netD = netD,
-        self.netG = netG,
+        self.netD = (netD,)
+        self.netG = (netG,)
         self.optimD = optimD
         self.optimG = optimG
-        
+
     def train(self, epochs):
         device = self.device
         shape = (self.batch_size, self.seq_len, self.in_dim)
         criterion_adv = GANLoss(target_real_label=0.9, target_fake_label=0.1).to(device)
         criterion_l1n = nn.SmoothL1Loss().to(device)
         criterion_l2n = nn.MSELoss().to(device)
-        
+
         for epoch in range(epochs):
             for i in range(self.critic_iter):
                 z = torch.randn(shape).to(device)
                 fake_batch, real_batch, start_prices = self.data.get_samples(
-                    G=self.G, latent_dim=self.latent_dim, n=self.batch_size, ts_dim=self.ts_dim,conditional=self.conditional, use_cuda=self.use_cuda
+                    G=self.G,
+                    latent_dim=self.latent_dim,
+                    n=self.batch_size,
+                    ts_dim=self.ts_dim,
+                    conditional=self.conditional,
+                    use_cuda=self.use_cuda,
                 )
                 print("critic", i)
 

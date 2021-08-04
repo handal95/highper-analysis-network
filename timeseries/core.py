@@ -5,9 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from tensorboardX import SummaryWriter
-from timeseries.dataset import DataSettings
-from timeseries.datasets import NabDataset
+from timeseries.datasets import DataSettings, Dataset
 from timeseries.args import Args
 from timeseries.layers.LSTMGAN import LSTMGenerator, LSTMDiscriminator
 from timeseries.logger import Logger
@@ -30,7 +28,7 @@ def main(args):
 
     opt_trn = args.get_option(train=True)
     data_settings = DataSettings(args.opt.data, train=True)
-    dataset = NabDataset(settings=data_settings)
+    dataset = Dataset(settings=data_settings)
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=opt_trn["batch_size"],
@@ -51,7 +49,7 @@ def main(args):
     optimizerD = optim.Adam(netD.parameters(), lr=opt_trn["lr"])
     optimizerG = optim.Adam(netG.parameters(), lr=opt_trn["lr"] * 0.5)
     batch_size = opt_trn["batch_size"]
-    seq_len = dataset.window_length
+    seq_len = dataset.seq_len
     in_dim = dataset.n_feature
 
     # bandGan = BandGan(
@@ -64,7 +62,7 @@ def main(args):
     #     optimD=optimizerD,
     #     optimG=optimizerG
     # )
-    
+
     # bandGan.train(epochs=opt_trn["epochs"])
 
     # input dimension is same as number of feature
@@ -150,10 +148,10 @@ def main(args):
             runtime += end_time - start_time
 
             # if (epoch) % 10 == 0:
-            dashboard.visualize(
-                x.cpu(),
-                netG(torch.randn(shape).to(device)).cpu(),
-            )
+            # dashboard.visualize(
+            #     x.cpu(),
+            #     netG(torch.randn(shape).to(device)).cpu(),
+            # )
             vistime += time.time() - end_time
 
             print(
