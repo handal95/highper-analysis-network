@@ -9,3 +9,7 @@ __pycache__/
 
 # windows batch files
 *.bat
+
+*.pth
+
+timeseries/logs/*
