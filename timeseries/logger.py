@@ -42,7 +42,7 @@ class Logger:
                         "class": "logging.handlers.RotatingFileHandler",
                         "filename": "logs/core.log",
                         "formatter": "plain",
-                        "backupCount": 20
+                        "backupCount": 20,
                     },
                 },
                 "loggers": {

@@ -57,33 +57,29 @@ class NabDataset(Dataset):
         self.train = settings.train
         self.gap_opt = settings.gap_opt
         self.window_length = settings.window_length
-        self.stride = 1 if settings.train else self.window_length
+        self.stride = 1
 
         df = settings.load_csv_file()
         df["timestamp"] = pd.to_datetime(df["timestamp"], dayfirst=True)
         df = df.set_index("timestamp")
 
-        self.date = [group[0] for group in df.value.groupby(df.index.date)]
-        data = torch.from_numpy(
-            np.expand_dims(
-                np.array([group[1] for group in df.value.groupby(df.index.date)]), -1
-            )
-        ).float()
+        df = self.unroll(df[["value"]])
+        self.n_feature = 1
+        self.data = torch.from_numpy(df).float()
+        self.data = self.normalize(self.data)
 
-        self.data = self.normalize(data)
-        self.data_len = data.size(1)
-        self.in_dim = len(df.columns)
+        self.data_len = self.data.shape[0]
 
-        original_deltas = data[:, -1] - data[:, 0]
-        self.original_deltas = original_deltas
-        self.or_delta_max, self.or_delta_min = (
-            original_deltas.max(),
-            original_deltas.min(),
-        )
-        deltas = self.data[:, -1] - self.data[:, 0]
-        self.deltas = deltas
-        self.delta_mean, self.delta_std = deltas.mean(), deltas.std()
-        self.delta_max, self.delta_min = deltas.max(), deltas.min()
+    def unroll(self, data):
+        un_data = []
+        seq_len = int(self.window_length)
+        stride = int(self.stride)
+
+        idx = 0
+        while idx < len(data) - seq_len:
+            un_data.append(data[idx : idx + seq_len])
+            idx += stride
+        return np.array(un_data)
 
     def __len__(self):
         return self.data_len
@@ -99,21 +95,6 @@ class NabDataset(Dataset):
 
     def get_dayofweek(self, idx):
         return self.date[idx].weekday()
-
-    # create sequences
-    def unroll(self, data, labels):
-        un_data = []
-        un_labels = []
-        seq_len = int(self.window_length)
-        stride = int(self.stride)
-
-        idx = 0
-        while idx < len(data) - seq_len:
-            un_data.append(data.iloc[idx : idx + seq_len].values)
-            un_labels.append(labels.iloc[idx : idx + seq_len].values)
-            idx += stride
-
-        return np.array(un_data), np.array(un_labels)
 
     def assign_ano(self, df_x=None):
         y = np.zeros(len(df_x))

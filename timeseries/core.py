@@ -1,43 +1,35 @@
-from timeseries.dataset import DataSettings
-from timeseries.dataset import NabDataset
-from timeseries.args import Args
-from timeseries.layers.LSTMGAN import LSTMGenerator, LSTMDiscriminator
-from timeseries.logger import Logger
-
-import os
+from pickle import TRUE
+import time
+from timeseries.bandgan import BandGan
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision
-from torch.autograd import Variable
-from tensorboardX import SummaryWriter
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+from tensorboardX import SummaryWriter
+from timeseries.dataset import DataSettings
+from timeseries.datasets import NabDataset
+from timeseries.args import Args
+from timeseries.layers.LSTMGAN import LSTMGenerator, LSTMDiscriminator
+from timeseries.logger import Logger
+from timeseries.bandgan import BandGan
+
+from utils.visualize import Dashboard
+from utils.loss import GANLoss
+
 from utils.visualize import visualize
-import numpy as np
-from sklearn.metrics import cohen_kappa_score
-from sklearn.metrics import roc_curve, auc, roc_auc_score
 
 logger = Logger(__file__)
 
 torch.manual_seed(31)
-device = torch.device(
-    "cuda:0" if torch.cuda.is_available() else "cpu"
-)  # select the device
 
 
 def main(args):
     logger.info("run analize model")
-    writer = SummaryWriter("logs/")
 
-    if torch.cuda.is_available():
-        logger.info("run with cuda")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     opt_trn = args.get_option(train=True)
-
-    data_settings = DataSettings(args.opt.data)
+    data_settings = DataSettings(args.opt.data, train=True)
     dataset = NabDataset(settings=data_settings)
     dataloader = torch.utils.data.DataLoader(
         dataset,
@@ -46,139 +38,146 @@ def main(args):
         num_workers=opt_trn["workers"],
     )
 
-    # input dimension is same as number of feature
-    latent_vetor = 100
-    in_dim = latent_vetor + 2
-    # Create generator and discriminator models
-    netD = LSTMDiscriminator(in_dim=3, hidden_dim=256, device=device).to(device)
-    netG = LSTMGenerator(in_dim=in_dim, out_dim=1, hidden_dim=256, device=device).to(device)
-    
-    optimizerG = optim.Adam(netG.parameters(), lr=opt_trn["lr"])
+    netD = torch.load("netD_e0.pth")
+    netG = torch.load("netG_e0.pth")
+
+    hidden_dim = 256
+    # netD = LSTMDiscriminator(in_dim=in_dim, hidden_dim=hidden_dim, device=device).to(
+    #     device
+    # )
+    # netG = LSTMGenerator(
+    #     in_dim=in_dim, out_dim=in_dim, hidden_dim=hidden_dim, device=device
+    # ).to(device)
     optimizerD = optim.Adam(netD.parameters(), lr=opt_trn["lr"])
+    optimizerG = optim.Adam(netG.parameters(), lr=opt_trn["lr"] * 0.5)
+    batch_size = opt_trn["batch_size"]
+    seq_len = dataset.window_length
+    in_dim = dataset.n_feature
+
+    # bandGan = BandGan(
+    #     batch_size=batch_size,
+    #     seq_len=seq_len,
+    #     device=device,
+    #     dataloader=dataloader,
+    #     netD=netD,
+    #     netG=netG,
+    #     optimD=optimizerD,
+    #     optimG=optimizerG
+    # )
     
-    criterion = nn.BCELoss().to(device)
-    
-    seq_len = len(dataset)
+    # bandGan.train(epochs=opt_trn["epochs"])
 
-    #Generate fixed noise to be used for visualization
+    # input dimension is same as number of feature
+    # Create generator and discriminator models
 
-    #Sample both deltas and noise for visualization
-    deltas = dataset.sample_deltas(opt_trn["batch_size"]).unsqueeze(2).repeat(1, 2 * seq_len, 1).to(device)
+    criterion_adv = GANLoss(target_real_label=0.9, target_fake_label=0.1).to(device)
+    criterion_l1n = nn.SmoothL1Loss().to(device)
+    criterion_l2n = nn.MSELoss().to(device)
 
-    REAL_LABEL = 1
-    FAKE_LABEL = 0
+    dashboard = Dashboard()
     for epoch in range(opt_trn["epochs"]):
+        runtime = vistime = 0
+        running_loss = {"D": 0, "G": 0, "Dx": 0, "DGz1": 0, "DGz2": 0, "l1": 0, "l2": 0}
         for i, data in enumerate(dataloader, 0):
-            niter = epoch * len(dataloader) + i
-            real = data.to(device)
-            batch_size, seq_len = real.size(0), real.size(1)
+            start_time = time.time()
 
-            dow = dataset.get_dayofweek(i)
-            dows = torch.cat(
-                (torch.full((batch_size, seq_len, 1), (dow - 1) % 6, device=device),
-                torch.full((batch_size, seq_len, 1), dow, device=device)),
-                dim = 1
-            )
+            # Prepare dataset
+            x = data.to(device)
+            batch_size, seq_len = x.size(0), x.size(1)
+            shape = (batch_size, seq_len, in_dim)
 
-            prev = dataset.get_prev(i).to(device).unsqueeze(0)
-            real = torch.cat((prev, real), dim=1)
-            real = torch.cat((real, deltas, dows), dim=2)
-            label = torch.full((batch_size, 2 * seq_len, 1), REAL_LABEL, device=device).type(torch.FloatTensor).to(device)
-
-            ############################
-            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
-            ###########################
-
-            # Train with real data
             netD.zero_grad()
-            label.fill_(REAL_LABEL)
-            output = netD(real).type(torch.FloatTensor).to(device)
-            errD_real = criterion(output, label)
-            errD_real.backward()
-            D_x = output.mean().item()
-            
-            # Train with fake data
-            noise = torch.randn(batch_size, 2 * seq_len, latent_vetor, device=device)
-            deltas = dataset.sample_deltas(batch_size).unsqueeze(2).repeat(1, 2 * seq_len, 1).to(device)
-            noise = torch.cat((noise, deltas, dows), dim=2)
-
-            fake = torch.chunk(netG(noise).detach(), 2, dim=1)[1]
-            fake = torch.cat((prev, fake), dim=1)
-            label.fill_(FAKE_LABEL)
-            
-            output = netD(torch.cat((fake, deltas, dows), dim=2)).to(device)
-
-            errD_fake = criterion(output, label)
-            errD_fake.backward()
-            D_G_z1 = output.mean().item()
-
-            errD = errD_real + errD_fake
-            optimizerD.step()
-            
-            #Visualize discriminator gradients
-            # for name, param in netD.named_parameters():
-            #     writer.add_histogram("DiscriminatorGradients/{}".format(name), param.grad, niter)
-
-            ############################
-            # (2) Update G network: maximize log(D(G(z)))
-            ###########################
             netG.zero_grad()
-            label.fill_(REAL_LABEL) 
-            output = netD(torch.cat((fake, deltas, dows), dim=2))
-            errG = criterion(output, label)
+            ############################
+            # (0) Update D network
+            ###########################
+            # Train with Real Data x
+            optimizerD.zero_grad()
+
+            Dx = netD(x)
+            errD_real = criterion_adv(Dx, target_is_real=True)
+            errD_real.backward()
+            optimizerD.step()
+
+            running_loss["Dx"] += errD_real
+
+            # Train with Fake Data z
+            optimizerD.zero_grad()
+
+            z = torch.randn((batch_size, seq_len, in_dim)).to(device)
+            Gz = netG(z)
+            DGz1 = netD(Gz)
+
+            errD_fake = criterion_adv(DGz1, target_is_real=False)
+            errD_fake.backward()
+            optimizerD.step()
+
+            errD = errD_fake + errD_real
+
+            running_loss["DGz1"] += DGz1.mean().item()
+            running_loss["D"] += errD
+            # ############################
+            # # (2) Update G network: maximize log(D(G(z)))
+            # ###########################
+            optimizerD.zero_grad()
+            optimizerG.zero_grad()
+
+            z = torch.randn(shape).to(device)
+            Gz = netG(z)
+            DGz2 = netD(Gz)
+
+            errG_ = criterion_adv(DGz2, target_is_real=False)
+
+            gradients = Gz - x
+            gradients_sqr = torch.square(gradients)
+            gradients_sqr_sum = torch.sum(gradients_sqr)
+            gradients_l2_norm = torch.sqrt(gradients_sqr_sum)
+            gradients_penalty = torch.square(1 - gradients_l2_norm)
+
+            errl1 = criterion_l1n(Gz, x) * 100.0
+            errl2 = criterion_l2n(Gz, x) * 100.0
+            errG = errG_ + errl1 + errl2 + gradients_penalty
             errG.backward()
-            D_G_z2 = output.mean().item()
-            
+
             optimizerG.step()
-            
-            # #Visualize generator gradients
-            # for name, param in netG.named_parameters():
-            #     writer.add_histogram("GeneratorGradients/{}".format(name), param.grad, niter)
 
-            ###########################
-            # (3) Suprevised updated of G network
-            ###########################
-            #Report metrics
-            if i == 1:
-                real_display = real.cpu()
-                fake_display = fake.cpu()
+            running_loss["G"] += errG_
+            running_loss["l1"] += errl1
+            running_loss["l2"] += errl2
+            running_loss["DGz2"] += DGz2.mean().item()
 
-            print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f' 
-                % (epoch, opt_trn["epochs"], i, len(dataloader),
-                    errD.item(), errG.item(), D_x, D_G_z1, D_G_z2), end='\r')
+            end_time = time.time()
+            runtime += end_time - start_time
 
-            writer.add_scalar('DiscriminatorLoss', errD.item(), niter)
-            writer.add_scalar('GeneratorLoss', errG.item(), niter)
-            writer.add_scalar('D_of_X', D_x, niter) 
-            writer.add_scalar('D_of_G_of_z', D_G_z1, niter)
+            # if (epoch) % 10 == 0:
+            dashboard.visualize(
+                x.cpu(),
+                netG(torch.randn(shape).to(device)).cpu(),
+            )
+            vistime += time.time() - end_time
 
+            print(
+                f"[{epoch}/{opt_trn['epochs']}][{i}/{len(dataloader)}] "
+                f"D  {running_loss['D']/(i + 1):.4f}",
+                f"G  {running_loss['G']/(i + 1):.4f}",
+                f"l1  {running_loss['l1']/(i + 1):.4f}",
+                f"l2  {running_loss['l2']/(i + 1):.4f}",
+                f"Dx  {running_loss['Dx']/(i + 1):.3f}",
+                f"DGz1  {running_loss['DGz1']/(i + 1):.3f}",
+                f"DGz2  {running_loss['DGz2']/(i + 1):.3f} ",
+                f"|| {(runtime + vistime):.2f}sec",
+                end="\r",
+            )
         print()
         ###########################
         # ( ) End of the epoch
         ###########################
-        if epoch % 100 == 0:
-            visualize(
-                batch_size=opt_trn["batch_size"],
-                real_display=dataset.denormalize(real_display),
-                fake_display=dataset.denormalize(fake_display),
-                block=True
-            )
-            # Checkpoint
-            torch.save(netG, 'netG_epoch_%d.pth' % (epoch))
-            torch.save(netD, 'netD_epoch_%d.pth' % (epoch))
-                   
-        # loss_D = errD.item()
-        # loss_G = errG.item()
-        # loss = loss_D + loss_G
-        # score = D_x + D_G_z1 + D_G_z2
-        # print(
-        #     f"[{epoch + 1:3d}/{opt_trn['epochs']:3d}][{i + 1:3d}/{len(dataloader):3d}] "
-        #     f"Loss({loss:.4f}) - D {loss_D:.4f}, G {loss_G:.4f} | "
-        #     f"Score({score:.4f}) - D(x) {D_x:.4f}, D(G(z)) {D_G_z1:.4f} / {D_G_z2:.4f} |"
-        # )
-        
-
-    # seq_len = dataset_trn.window_length  # sequence length is equal to the window length
+        # # Checkpoint
+        if epoch % 10 == 0:
+            torch.save(netG, "netG_e%d.pth" % (epoch))
+            torch.save(netD, "netD_e%d.pth" % (epoch))
+            torch.save(netG, "netG_latest.pth")
+            torch.save(netD, "netD_latest.pth")
 
     return
 
