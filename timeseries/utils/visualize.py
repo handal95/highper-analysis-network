@@ -3,47 +3,58 @@ import matplotlib.pyplot as plt
 
 
 class Dashboard:
-    def __init__(self):
+    def __init__(self, dataset):
         super(Dashboard).__init__()
+        self.dataset = dataset
         self.fig, self.ax = self.init_figure()
+
         self.data = None
         self.pred = None
+        self.time = None
         self.scope = 480
 
     def init_figure(self):
         fig, ax = plt.subplots(figsize=(12, 6), facecolor="lightgray")
+        fig.suptitle(self.dataset)
         ax.set_xlabel("Time")
         ax.set_ylabel("Value")
-        ax.set_title("Title")
 
         return fig, ax
 
-    def visualize(self, newdata, gz):
+    def visualize(self, time, newdata, gz):
         fig, ax = self.fig, self.ax
 
-        data = newdata[0].detach().numpy()
-        pred = gz[0].detach().numpy()
-
-        if self.data is None:
-            self.data = data
-        else:
-            self.data = np.concatenate((self.data, data[-1:]))
-
-        if self.pred is None:
-            self.pred = pred
-        else:
-            self.pred = np.concatenate((self.pred, pred[-1:]))
-
+        data = newdata[0].detach().numpy().ravel()
+        pred = gz[0].detach().numpy().ravel()
+        seq_len = data.shape[0]
+        
+        def concat(target, x):
+            if target is None:
+                target = x
+            else:
+                target = np.concatenate((target, x[-seq_len:]))
+            return target
+        
+        self.data = concat(self.data, data)
+        self.pred = concat(self.pred, pred)
+        self.time = concat(self.time, time)
+        
         min_scope = max(0, self.data.size - self.scope + 1)
         min_axvln = min(self.scope, self.data.size)
         ax.clear()
         ax.grid()
 
         ax.axvline(x=min_axvln, ymin=-1.0, ymax=1.0)
-        ax.plot(self.data[min_scope:], "r-")
-        ax.plot(self.pred[min_scope:], "b-")
+        ax.plot(self.data[min_scope:], "r-", label="Actual Data")
+        ax.plot(self.pred[min_scope:], "b-", label="Generated Data")
+        ax.legend()
 
-        ax.relim()
+        xtick = np.arange(0, min_axvln, 24)
+        
+        values = self.time[min_scope::24]
+        plt.xticks(xtick, values, rotation=45)
+
+        # ax.relim()
         ax.autoscale_view()
 
         fig.show()
@@ -51,184 +62,37 @@ class Dashboard:
         fig.canvas.flush_events()
 
 
-def visualize(
-    batch_size, real_display, fake_display=None, fake_display2=None, block=True
-):
-    fig = plt.figure(figsize=(16, 8))
+def plt_loss(gen_loss, dis_loss, path, num):
+    idx = num * 1000
+    gen_loss = np.clip(np.array(gen_loss), a_min=-1500, a_max=1500)
+    dis_loss = np.clip(-np.array(dis_loss), a_min=-1500, a_max=1500)
+    plt.figure(figsize=(9, 4.5))
+    plt.plot(gen_loss[idx : idx + 1001], label="g_loss", alpha=0.7)
+    plt.plot(dis_loss[idx : idx + 1001], label="d_loss", alpha=0.7)
+    plt.title("Loss")
+    plt.legend()
+    plt.savefig(
+        path + "/Loss_" + str(num) + ".png", bbox_inches="tight", pad_inches=0.5
+    )
+    plt.close()
 
-    fig = _visualize(fig, real_display, batch_size=batch_size, titles="Real")
-    # fig = _visualize(fig, fake_display, batch_size=batch_size, titles="Fake")
-    # fig = _visualize(fig, fake_display2, batch_size=batch_size, titles="Fake2")
 
-    plt.show(block=block)
-    plt.pause(1)
+def plt_progress(real, fake, epoch, path):
+    real = np.squeeze(real)
+    fake = np.squeeze(fake)
 
+    fig, ax = plt.subplots(2, 2, figsize=(10, 10))
+    ax = ax.flatten()
+    fig.suptitle("Data generation, iter:" + str(epoch))
+    for i in range(ax.shape[0]):
+        ax[i].plot(real[i], color="red", label="Real", alpha=0.7)
+        ax[i].plot(fake[i], color="blue", label="Fake", alpha=0.7)
+        ax[i].legend()
 
-def _visualize(fig, timeseries_batch, batch_size=4, titles=None):
-    offset = 1 if titles == "Real" else 2
-    offset = offset + 1 if titles == "Fake2" else offset
+    plt.savefig(
+        path + "/line_generation" + "/Iteration_" + str(epoch) + ".png",
+        bbox_inches="tight",
+        pad_inches=0.5,
+    )
+    plt.clf()
 
-    for i, series in enumerate(timeseries_batch.detach()):
-        ax = fig.add_subplot(3, 1, offset)
-        if titles:
-            ax.set_title(titles)
-        ax.plot(series.numpy())
-        fig.canvas.draw()
-        break
-
-    return fig
-
-    # def visualize(self, data, ano):
-    #     fig = plt.figure(figsize=(10, 10))
-    #     plt.ion()
-
-    #     y = data["value"]
-    #     x = data["timestamp"]
-
-    #     fulldata_x = x.values.reshape(1, -1)
-    #     fulldata_y = y.values.reshape(1, -1)
-    #     fullanomal = ano.values.reshape(1, -1)
-
-    #     time_pivot = 240
-
-    #     data_x = fulldata_x[:, :time_pivot]
-    #     data_y = fulldata_y[:, :time_pivot]
-    #     ano_y = fullanomal[:, :time_pivot]
-
-    #     fig = plt.figure(figsize=(16, 8))
-    #     ax = plt.subplot(111, frameon=False)
-    #     plt.grid(True)
-
-    #     lines = []
-    #     for i in range(fulldata_x.shape[0]):
-    #         lw = 1 - 2 * i / 20.0
-    #         (line,) = ax.plot(data_x[i], data_y[i], "b-", color="k", lw=lw)
-    #         lines.append(line)
-
-    #     ax.set_xlabel("Time")
-    #     ax.set_ylabel("Data")
-    #     ax.text(
-    #         0.4,
-    #         1.0,
-    #         self.dataset,
-    #         transform=ax.transAxes,
-    #         ha="right",
-    #         va="bottom",
-    #         color="k",
-    #         family="sans-serif",
-    #         fontweight="bold",
-    #         fontsize=16,
-    #     )
-    #     ax.set_title("normal", loc="right", color="b", fontsize=16)
-
-    #     def update(*args):
-    #         fulldata_x[:, :-1] = fulldata_x[:, 1:]
-    #         fulldata_y[0, :-1] = fulldata_y[:, 1:]
-    #         fullanomal[:, :-1] = fullanomal[:, 1:]
-
-    #         data_x[:, :] = fulldata_x[:, :time_pivot]
-    #         data_y[:, :] = fulldata_y[:, :time_pivot]
-    #         ano_y[:, :] = fullanomal[:, :time_pivot]
-
-    #         if data_x[:, -1] == fulldata_x[:, -1]:
-    #             plt.clf()
-    #             plt.close()
-
-    #         for i in range(len(data_y)):
-    #             convert = ano_y[:, -2] - ano_y[:, -1]
-    #             if convert > 0:
-    #                 ax.set_title("normal", loc="right", color="b", fontsize=16)
-    #             elif convert < 0:
-    #                 ax.set_title(
-    #                     "Anomalies Detected",
-    #                     loc="right",
-    #                     color="r",
-    #                     fontweight="bold",
-    #                     fontsize=16,
-    #                 )
-
-    #             lines[i].set_xdata(data_x[i])
-    #             lines[i].set_ydata(data_y[i])
-    #             ax.relim()
-    #             ax.autoscale_view()
-
-    #     anim = animation.FuncAnimation(fig, update, interval=1)
-
-    # def normalized_visualize(self, time, value, ano):
-    #     fig = plt.figure(figsize=(10, 10))
-    #     plt.ion()
-
-    #     y = value
-    #     x = time
-
-    #     fulldata_x = x.values.reshape(1, -1)
-    #     fulldata_y = y.values.reshape(1, -1)
-    #     fullanomal = ano.values.reshape(1, -1)
-
-    #     time_pivot = 240
-
-    #     data_x = fulldata_x[:, :time_pivot]
-    #     data_y = fulldata_y[:, :time_pivot]
-    #     ano_y = fullanomal[:, :time_pivot]
-
-    #     fig = plt.figure(figsize=(16, 8))
-    #     ax = plt.subplot(111, frameon=False)
-    #     plt.grid(True)
-
-    #     lines = []
-    #     for i in range(fulldata_x.shape[0]):
-    #         lw = 1 - 2 * i / 20.0
-    #         (line,) = ax.plot(data_x[i], data_y[i], "b-", color="k", lw=lw)
-    #         lines.append(line)
-
-    #     plt.ylim([-3, 3])
-    #     ax.set_xlabel("Time")
-    #     ax.set_ylabel("Data")
-    #     ax.text(
-    #         0.4,
-    #         1.0,
-    #         self.dataset,
-    #         transform=ax.transAxes,
-    #         ha="right",
-    #         va="bottom",
-    #         color="k",
-    #         family="sans-serif",
-    #         fontweight="bold",
-    #         fontsize=16,
-    #     )
-    #     ax.set_title("normal", loc="right", color="b", fontsize=16)
-
-    #     def update(*args):
-    #         fulldata_x[:, :-1] = fulldata_x[:, 1:]
-    #         fulldata_y[0, :-1] = fulldata_y[:, 1:]
-    #         fullanomal[:, :-1] = fullanomal[:, 1:]
-
-    #         data_x[:, :] = fulldata_x[:, :time_pivot]
-    #         data_y[:, :] = fulldata_y[:, :time_pivot]
-    #         ano_y[:, :] = fullanomal[:, :time_pivot]
-
-    #         if data_x[:, -1] == fulldata_x[:, -1]:
-    #             plt.clf()
-    #             plt.close()
-
-    #         for i in range(len(data_y)):
-    #             convert = ano_y[:, -2] - ano_y[:, -1]
-    #             if convert > 0:
-    #                 ax.set_title("normal", loc="right", color="b", fontsize=16)
-    #             elif convert < 0:
-    #                 ax.set_title(
-    #                     "Anomalies Detected",
-    #                     loc="right",
-    #                     color="r",
-    #                     fontweight="bold",
-    #                     fontsize=16,
-    #                 )
-
-    #             lines[i].set_xdata(data_x[i])
-    #             lines[i].set_ydata(data_y[i])
-
-    #             ax.relim()
-    #             ax.autoscale_view()
-
-    #     anim = animation.FuncAnimation(fig, update, interval=1)
-    #     input()

@@ -1,15 +1,10 @@
 import os
-from torch.utils import data
-import os
 import yaml
 import json
 import torch
 import numpy as np
 import pandas as pd
-import matplotlib.animation as animation
 
-from sklearn import preprocessing
-from matplotlib import pyplot as plt
 from torch.utils.data import Dataset
 
 
@@ -52,30 +47,49 @@ class Dataset(Dataset):
         Args:
             settings (object): settings for loading data and preprocessing
         """
+        self.dataset = settings.end_name
+
         self.train = settings.train
         self.gap_opt = settings.gap_opt
         self.seq_len = settings.window_length
-        self.stride = 1
+        self.stride = 4
 
         data = settings.load_csv_file()
         self.times = self.store_times(data)
-
-        data = self.windowing(data[["value"]])
-        self.n_feature = 1
-        self.data = torch.from_numpy(data).float()
-        self.data = self.normalize(self.data)
+        self.data = self._preprocessing(data)
 
         self.data_len = self.data.shape[0]
+        self.n_feature = self.data.shape[2]
 
-    def _preprocessing(self, data):
+    def _preprocessing(self, x):
+        data = self.windowing(x[["value"]])
+        data = torch.from_numpy(data).float()
+        data = self.normalize(data)
         return data
 
     def store_times(self, data):
-        return pd.to_datetime(data.index, dayfirst=True)
+        time = pd.to_datetime(data.index)
+        time = time.strftime("%y%m%d_%H%M")
+        time = self.windowing(time)
+        return time
 
     def windowing(self, x):
         stop = len(x) - self.seq_len
         return np.array([x[i : i + self.seq_len] for i in range(0, stop, self.stride)])
+
+    def get_samples(self, netG, shape, cond, device):
+        idx = np.random.randint(self.data.shape[0], size=shape[0])
+        x = self.data[idx].to(device)
+        z = torch.randn(shape).to(device)
+        if cond > 0:
+            z[:, :cond, :] = x[:, :cond, :]
+
+        y = netG(z)
+
+        # y = torch.cat((x.float(), y.float()), dim=2)
+        y = y.to(device)
+
+        return y, x
 
     def __len__(self):
         return self.data_len

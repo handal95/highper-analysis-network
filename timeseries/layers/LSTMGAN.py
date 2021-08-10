@@ -76,6 +76,7 @@ class LSTMDiscriminator(nn.Module):
         self.device = device
         self.n_layers = n_layers
         self.hidden_dim = hidden_dim
+        self.in_dim = in_dim
 
         self.lstm = nn.LSTM(in_dim, hidden_dim, n_layers, batch_first=True)
         self.linear = nn.Sequential(nn.Linear(hidden_dim, 1), nn.Sigmoid())
@@ -89,7 +90,7 @@ class LSTMDiscriminator(nn.Module):
         outputs = self.linear(
             recurrent_features.contiguous().view(batch_size * seq_len, self.hidden_dim)
         )
-        outputs = outputs.view(batch_size, seq_len, 1)
+        outputs = outputs.view(batch_size, seq_len, self.in_dim)
 
         return outputs
 
