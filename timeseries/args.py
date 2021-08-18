@@ -5,23 +5,26 @@ import yaml
 class Args:
     def __init__(self):
         parser = self.get_parser()
-        self.opt = parser.parse_args()
+
+        self.config_path = parser.config
+        self.opt = parser
 
     def get_parser(self):
-        parser = argparse.ArgumentParser(
-            add_help=False, description="Command Line Interface"
-        )
+        parser = argparse.ArgumentParser(description="** BandGan CLI **")
         parser.set_defaults(function=None)
         parser.add_argument(
-            "--data", type=str, default="config/data_config.yml", help="data.yml path"
+            "-cfg",
+            "--config",
+            type=str,
+            default="config/data_config.yml",
+            help="config.yml path",
         )
-
-        return parser
+        return parser.parse_args()
 
     def get_option(self, train=True):
         option = "train" if train else "test"
 
-        with open(self.opt.data) as f:
+        with open(self.opt.config) as f:
             config = yaml.safe_load(f)["args"][option]
 
         return {
@@ -30,3 +33,6 @@ class Args:
             "epochs": int(config["epochs"]),
             "lr": config["lr"],
         }
+
+    def __str__(self):
+        return str(self.opt)

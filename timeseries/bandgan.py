@@ -3,7 +3,7 @@ import torch
 from utils.visualize import plt_loss
 
 
-class BandGan:
+class BandGAN:
     def __init__(
         self,
         batch_size,
@@ -31,7 +31,7 @@ class BandGan:
         self.gp_weight = gp_weight
         self.optimD = optimD
         self.optimG = optimG
-        self.cond = 3
+        self.cond = seq_len // 2
         self.scorepath = "logs/"
         self.losses = {
             "G": [],
@@ -44,6 +44,7 @@ class BandGan:
 
     def train(self, epochs):
         device = self.device
+        runtime = 0
         # dashboard = Dashboard()
         for epoch in range(epochs):
             plot_num = 0
@@ -84,15 +85,9 @@ class BandGan:
             self.optimG.step()
             self.losses["G"].append(loss_G.item())
             end_time = time.time()
-            runtime = end_time - start_time
+            runtime += end_time - start_time
 
-            plt_loss(self.losses["G"], self.losses["D"], self.scorepath, plot_num)
-            y, x = self.data.get_samples(
-                netG=self.netG,
-                shape=(self.batch_size, self.seq_len, self.in_dim),
-                cond=self.cond,
-                device=device,
-            )
+            # plt_loss(self.losses["G"], self.losses["D"], self.scorepath, plot_num)
 
             print(
                 f"[{epoch}/{epochs}] " f"D  {self.losses['D'][-1]/(i + 1):.4f}",
@@ -107,3 +102,5 @@ class BandGan:
                 torch.save(self.netG, "netG_latest.pth")
                 torch.save(self.netD, "netD_latest.pth")
         print()
+        torch.save(self.netG, "netG_latest.pth")
+        torch.save(self.netD, "netD_latest.pth")

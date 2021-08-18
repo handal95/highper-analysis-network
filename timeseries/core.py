@@ -1,12 +1,17 @@
+import os
 import time
+import yaml
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.autograd import grad as torch_grad
+import numpy as np
+import pandas as pd
 
 from timeseries.args import Args
 from timeseries.logger import Logger
-from timeseries.bandgan import BandGan
-from timeseries.datasets import DataSettings, Dataset
+from timeseries.bandgan import BandGAN
+from timeseries.datasets import TimeseriesDataset
 from timeseries.layers.LSTMGAN import LSTMGenerator, LSTMDiscriminator
 
 from utils.loss import GANLoss
@@ -18,170 +23,302 @@ logger = Logger(__file__)
 torch.manual_seed(31)
 
 
-def main(args):
-    logger.info("run analize model")
+class BandGAN:
+    """
+    Band GAN
+    """
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def __init__(self):
+        # Config option
+        self.config = self.init_arguments()
 
-    opt_trn = args.get_option(train=True)
-    data_settings = DataSettings(args.opt.data, train=True)
-    dataset = Dataset(settings=data_settings)
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=opt_trn["batch_size"],
-        # shuffle=True,
-        num_workers=opt_trn["workers"],
-    )
+        # Model option
+        self.load = self.config["load"]
+        self.save = self.config["save"]
+        self.save_path = self.config["save"]["path"]
 
-    netD = torch.load("netD_latest.pth")
-    netG = torch.load("netG_latest.pth")
+        self.device = self.init_device()
+        self.dataset = TimeseriesDataset(self.config, self.device)
+        self.dataloader = self.init_dataloader(self.dataset)
+        (self.netG, self.netD) = self.init_model(self.dataset)
 
-    hidden_dim = 256
-    in_dim = dataset.n_feature
-    # netD = LSTMDiscriminator(in_dim=in_dim, hidden_dim=hidden_dim, device=device).to(
-    #     device
-    # )
-    # netG = LSTMGenerator(
-    #     in_dim=in_dim, out_dim=in_dim, hidden_dim=hidden_dim, device=device
-    # ).to(device)
-    optimizerD = optim.Adam(netD.parameters(), lr=opt_trn["lr"])
-    optimizerG = optim.Adam(netG.parameters(), lr=opt_trn["lr"] * 0.5)
-    batch_size = opt_trn["batch_size"]
-    seq_len = dataset.seq_len
-    in_dim = dataset.n_feature
-    bandGan = BandGan(
-        batch_size=batch_size,
-        seq_len=seq_len,
-        in_dim=in_dim,
-        device=device,
-        dataloader=dataloader,
-        dataset=dataset,
-        netD=netD,
-        netG=netG,
-        optimD=optimizerD,
-        optimG=optimizerG,
-    )
+        self.lr = self.config["lr"]["base"]
+        self.lr_gammaD = self.config["lr"]["gammaD"]
+        self.lr_gammaG = self.config["lr"]["gammaG"]
 
-    # bandGan.train(epochs=opt_trn["epochs"])
-    netD = bandGan.netD
-    netG = bandGan.netG
-    # input dimension is same as number of feature
-    # Create generator and discriminator models
+        self.iter_epochs = self.config["epochs"]["iter"]
+        self.base_epochs = self.config["epochs"]["base"]
+        self.iter_critic = self.config["epochs"]["critic"]
 
-    criterion_adv = GANLoss(target_real_label=0.9, target_fake_label=0.1).to(device)
-    criterion_l1n = nn.SmoothL1Loss().to(device)
-    criterion_l2n = nn.MSELoss().to(device)
+        self.in_dim = self.dataset.n_feature
+        self.cond = self.config["cond"]
+        self.seq_len = self.config["seq_len"]
 
-    dashboard = Dashboard(dataset.dataset)
-    for epoch in range(opt_trn["epochs"]):
-        runtime = vistime = 0
-        running_loss = {"D": 0, "G": 0, "Dx": 0, "DGz1": 0, "DGz2": 0, "l1": 0, "l2": 0}
-        for i, data in enumerate(dataloader, 0):
+        self.batch_size = self.config["batch_size"]
+        self.losses = {
+            "G": [],
+            "D": [],
+            "GP": [],
+            "gradient_norm": [],
+            "l1": 0.0,
+            "l2": 0.0,
+        }
+
+        self.gp_weight = self.config["grad_penalty"]["weight"]
+        self.print_verbose = self.config["print"]["verbose"]
+        self.print_newline = self.config["print"]["newline"]
+        self.visual = True if self.config["batch_size"] == 1 else False
+
+    def init_arguments(self):
+        """
+        Setting Input arguments option
+        """
+        args = Args()
+
+        CONFIG_FILE_IS_NOT_EXISTS = "Config File is not exists"
+        assert os.path.exists(args.config_path), CONFIG_FILE_IS_NOT_EXISTS
+
+        with open(args.config_path) as f:
+            config = yaml.safe_load(f)
+
+        return config
+
+    def init_device(self):
+        """
+        Setting device option
+        TODO : Multi GPU option
+        """
+
+        device = torch.device("cpu")
+
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+
+        logger.info(f"Set torch device `{device}`")
+        return device
+
+    def init_dataloader(self, dataset):
+        dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=dataset.batch_size,
+            # shuffle=dataset.shuffle,
+            num_workers=dataset.workers,
+        )
+        return dataloader
+
+    def init_model(self, dataset):
+        hidden_dim = dataset.hidden_dim
+        in_dim = dataset.n_feature
+        device = self.device
+
+        if self.load["opt"] is True:
+            logger.info("Loading Pretrained Models..")
+            netG_path = os.path.join(self.load["path"], f"netG_{self.load['base']}.pth")
+            netD_path = os.path.join(self.load["path"], f"netD_{self.load['base']}.pth")
+            if os.path.exists(netG_path) and os.path.exists(netD_path):
+                logger.info(f" - Loaded net D : {netD_path}, net G: {netG_path}")
+                netG = torch.load(netG_path)
+                netD = torch.load(netD_path)
+                return netG, netD
+            else:
+                logger.info("Loading Pretrained Models is Fail, file is not exists")
+
+        netG = LSTMGenerator(in_dim, out_dim=in_dim, hidden_dim=hidden_dim, device=device).to(device)
+        netD = LSTMDiscriminator(in_dim, hidden_dim=hidden_dim, device=device).to(device)
+        return (netG, netD)
+
+    def run(self):
+        logger.info("RUN the model")
+
+        device = self.device
+        shape = (self.batch_size, self.seq_len, self.in_dim)
+
+        optimizerD = optim.RMSprop(self.netD.parameters(), lr=self.lr * self.lr_gammaD)
+        optimizerG = optim.RMSprop(self.netG.parameters(), lr=self.lr * self.lr_gammaG)
+        criterion_adv = GANLoss(target_real_label=0.9, target_fake_label=0.1).to(device)
+        criterion_l1n = nn.SmoothL1Loss().to(device)
+        criterion_l2n = nn.MSELoss().to(device)
+
+    
+        # df = pd.DataFrame(np.zeros())
+        runtime = 0
+        dashboard = Dashboard(self.dataset)
+        samples = None
+        for epoch in range(self.base_epochs, self.iter_epochs):
             start_time = time.time()
+            for i in range(self.iter_critic):
+                y, x = self.dataset.get_samples(self.netG, shape=shape, cond=self.cond)
+                
+                Dx = self.netD(x)
+                DGz = self.netD(y)
+                optimizerD.zero_grad()
+                
+                with torch.backends.cudnn.flags(enabled=False):
+                    grad_penalty = self._grad_penalty(x, y)
+                loss_D = DGz.mean() - Dx.mean() + grad_penalty
+                loss_D.backward()
+                optimizerD.step()
 
-            # Prepare dataset
-            x = data.to(device)
-            batch_size, seq_len = x.size(0), x.size(1)
-            shape = (batch_size, seq_len, in_dim)
+                if i == self.iter_critic - 1:
+                    self.losses["D"].append(loss_D)
+                    self.losses["GP"].append(grad_penalty)
 
-            netD.zero_grad()
-            netG.zero_grad()
-            ############################
-            # (0) Update D network
-            ###########################
-            # Train with Real Data x
-            optimizerD.zero_grad()
-
-            Dx = netD(x)
-            errD_real = criterion_adv(Dx, target_is_real=True)
-            errD_real.backward()
-            optimizerD.step()
-
-            running_loss["Dx"] += errD_real
-
-            # Train with Fake Data z
-            optimizerD.zero_grad()
-
-            z = torch.randn((batch_size, seq_len, in_dim)).to(device)
-            Gz = netG(z)
-            DGz1 = netD(Gz)
-
-            errD_fake = criterion_adv(DGz1, target_is_real=False)
-            errD_fake.backward()
-            optimizerD.step()
-
-            errD = errD_fake + errD_real
-
-            running_loss["DGz1"] += DGz1.mean().item()
-            running_loss["D"] += errD
-            # ############################
-            # # (2) Update G network: maximize log(D(G(z)))
-            # ###########################
-            optimizerD.zero_grad()
             optimizerG.zero_grad()
+            y, x = self.dataset.get_samples(self.netG, shape=shape, cond=self.cond)
+            Dy = self.netD(y)
+            
+            errl1 = criterion_l1n(y, x)
+            errl2 = criterion_l2n(y, x)
 
-            z = torch.randn(shape).to(device)
-            Gz = netG(z)
-            DGz2 = netD(Gz)
-
-            errG_ = criterion_adv(DGz2, target_is_real=False)
-
-            gradients = Gz - x
-            gradients_sqr = torch.square(gradients)
-            gradients_sqr_sum = torch.sum(gradients_sqr)
-            gradients_l2_norm = torch.sqrt(gradients_sqr_sum)
-            gradients_penalty = torch.square(1 - gradients_l2_norm)
-
-            errl1 = criterion_l1n(Gz, x) * 200.0
-            errl2 = criterion_l2n(Gz, x) * 100.0
-            errG = errG_ + errl1 + errl2 + gradients_penalty
-            errG.backward()
+            loss_G = -Dy.mean()
+            loss_G.backward()
 
             optimizerG.step()
-
-            running_loss["G"] += errG_
-            running_loss["l1"] += errl1
-            running_loss["l2"] += errl2
-            running_loss["DGz2"] += DGz2.mean().item()
-
-            end_time = time.time()
-            runtime += end_time - start_time
-
-            if opt_trn["batch_size"] < 256:
-                dashboard.visualize(
-                    dataset.times[i],
-                    x.cpu(),
-                    netG(torch.randn(shape).to(device)).cpu(),
+            self.losses["G"].append(loss_G)
+            self.losses["l1"] = errl1
+            self.losses["l2"] = errl2
+            
+            if self.print_verbose > 0:
+                print(
+                    f"[{(epoch + 1):4d}/{self.iter_epochs:4d}]"
+                    f" D  {self.losses['D'][-1]:2.4f}"
+                    f" G  {self.losses['G'][-1]:2.4f}",
+                    f" L1 {self.losses['l1']:2.4f} ",
+                    f" L2 {self.losses['l2']:2.4f} ",
+                    f" GP  {self.losses['GP'][-1]:.4f}",
+                    end="\r",
                 )
-            vistime += time.time() - end_time
+                if (epoch + 1) % self.print_newline == 0:
+                    print()
 
-            print(
-                f"[{epoch}/{opt_trn['epochs']}][{i}/{len(dataloader)}] "
-                f"D  {running_loss['D']/(i + 1):.3f}",
-                f"G  {running_loss['G']/(i + 1):.3f}",
-                f"l1  {running_loss['l1']/(i + 1):.3f}",
-                f"l2  {running_loss['l2']/(i + 1):.3f}",
-                f"Dx  {running_loss['Dx']/(i + 1):.3f}",
-                f"DGz1  {running_loss['DGz1']/(i + 1):.3f}",
-                f"DGz2  {running_loss['DGz2']/(i + 1):.3f} ",
-                f"|| {(runtime + vistime):.2f}sec",
-                end="\r",
-            )
-        print()
-        ###########################
-        # ( ) End of the epoch
-        ###########################
-        # # Checkpoint
-        if (epoch + 1) % 100 == 0:
-            torch.save(netG, "netG_vanilla_e%d.pth" % (epoch + 1))
-            torch.save(netD, "netD_vanilla_e%d.pth" % (epoch + 1))
-            torch.save(netG, "netG_latest.pth")
-            torch.save(netD, "netD_latest.pth")
-    torch.save(netG, "netG_latest.pth")
-    torch.save(netD, "netD_latest.pth")
-    return
+            running_loss = {"D": 0, "G": 0, "Dx": 0, "l1": 0, "l2": 0, "GP": 0}
+            for i, data in enumerate(self.dataloader, 0):
+                optimizerD.zero_grad()
+                optimizerG.zero_grad()
 
+                x = data.to(self.device)
+                shape = (x.size(0), x.size(1), self.in_dim)
+                
+                Dx = self.netD(x)
+                errD_real = criterion_adv(Dx, target_is_real=True)
+                errD_real.backward()
+
+                # Train with Fake Data z
+                y = self.netG(torch.randn(shape).to(device))
+                DGz1 = self.netD(y)
+
+                errD_fake = criterion_adv(DGz1, target_is_real=False)
+                errD_fake.backward()
+                errD = errD_real + errD_fake
+                optimizerD.step() 
+
+                y = self.netG(torch.randn(shape).to(device))
+                Dy = self.netD(y)
+
+                errG_ = criterion_adv(Dy, target_is_real=False)
+
+                gradients = y - x
+                gradients_sqr = torch.square(gradients)
+                gradients_sqr_sum = torch.sum(gradients_sqr)
+                gradients_l2_norm = torch.sqrt(gradients_sqr_sum)
+                gradients_penalty = torch.square(1 - gradients_l2_norm)
+                gradients_penalty = gradients_penalty / shape[0]
+
+                errl1 = criterion_l1n(y, x) * 1000.0
+                errl2 = criterion_l2n(y, x) * 1000.0
+                errG = errG_ + errl1 + errl2 + gradients_penalty
+                errG.backward()
+
+                optimizerG.step()
+                running_loss["D"] += errD
+                running_loss["G"] += errG_
+                running_loss["l1"] += errl1
+                running_loss["l2"] += errl2
+                running_loss["GP"] += gradients_penalty
+                
+                # y = self.netG(torch.randn(shape).to(device))
+                # sample_Dy = self.dataset.denormalize(y.cpu()).cpu()
+                # sample_Dy = sample_Dy.detach().numpy().reshape(-1, self.seq_len)
+                # sample_Dy = pd.DataFrame(sample_Dy)
+
+                # if samples is None:
+                #     samples = sample_Dy
+                # else:
+                #     samples = samples.append(sample_Dy)
+                # samples.to_csv("sample2.csv")
+                print(
+                    f"[{i + 1:4d}/{len(self.dataloader):4d}] ", end='\r')
+
+                if self.print_verbose > 0 and (i + 1) == len(self.dataloader):
+                    runtime += (time.time() - start_time) 
+                    print(
+                        f"[{i + 1:4d}/{len(self.dataloader):4d}] "
+                        f"D  {running_loss['D']/(i + 1):.4f} ",
+                        f"G  {running_loss['G']/(i + 1):.4f} ",
+                        f"L1  {running_loss['l1']/(i + 1):.3f} ",
+                        f"L2  {running_loss['l2']/(i + 1):.3f} ",
+                        f"GP  {running_loss['GP']/(i + 1):.3f} ",
+                        f" || {self._runtime(epoch + 1, runtime)}",
+                        end="\r"
+                    )
+
+                if self.visual is True:
+                    y1 = self.netG(torch.randn(shape).to(device))
+                    dashboard._visualize(
+                        self.dataset.time[i],
+                        self.dataset.denormalize(x.cpu()),
+                        self.dataset.denormalize(y1.cpu()),
+                    )
+            
+            if (epoch + 1) % (self.print_newline // 10) == 0:
+                print()
+
+            if self.save["opt"] is True and (epoch + 1) % self.save["interval"] == 0:
+                logger.info(f"Model saved Epochs {epoch+1}")
+                torch.save(self.netG, f"pretrained/netG_e{epoch + 1}.pth")
+                torch.save(self.netD, f"pretrained/netD_e{epoch + 1}.pth")
+                torch.save(self.netG, "pretrained/netG_latest.pth")
+                torch.save(self.netD, "pretrained/netD_latest.pth")
+
+        if self.save["opt"] is True:
+            logger.info(f"Model saved Epochs {epoch+1}")
+            torch.save(self.netG, "pretrained/netG_latest.pth")
+            torch.save(self.netD, "pretrained/netD_latest.pth")
+        
+    def _grad_penalty(self, x, y):
+        batch_size = x.size()[0]
+
+        alpha = torch.rand((batch_size, 1, 1), requires_grad=True)
+        alpha = alpha.expand_as(x).to(self.device)
+
+        # mixed sample from real and fake; make approx of the 'true' gradient norm
+        interpolates = alpha * x.data + (1 - alpha) * y.data
+        interpolates = interpolates.to(self.device)
+
+        D_interpolates = self.netD(interpolates)
+        fake = torch.ones(D_interpolates.size()).to(self.device)
+
+        gradients = torch_grad(
+            outputs=D_interpolates,
+            inputs=interpolates,
+            grad_outputs=fake,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True,
+        )[0]
+        gradients = gradients.view(gradients.size(0), -1)
+        gradient_penalty = self.gp_weight * ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+        return gradient_penalty
+
+    def _runtime(self, epoch, time):
+        mean_time = time / (epoch - self.base_epochs)
+        left_epoch = self.iter_epochs - epoch
+        done_time = time + mean_time * left_epoch
+
+        runtime = f"{time:4.2f} / {done_time:4.2f} sec "
+        return runtime
 
 if __name__ == "__main__":
     # Argument options
-    main(Args())
+    model = BandGAN()
+    model.run()

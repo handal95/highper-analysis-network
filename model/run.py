@@ -8,8 +8,12 @@ from model.exc.exc import HANException, QuitException
 from model.feature.encoding import one_hot_encoding
 from model.feature.scale import scale_feature
 from model.feature.select import select_feature
-from model.feature.split import shuffle_train_data, split_label_feature split_train_valid
-from model.model.model import build_model, estimate_model, fit_model
+from model.feature.split import (
+    shuffle_train_data,
+    split_label_feature,
+    split_train_valid,
+)
+from model.model import build_model, estimate_model, fit_model
 from model.utils.logger import Logger
 
 logger = Logger()
