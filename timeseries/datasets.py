@@ -4,6 +4,9 @@ import json
 import torch
 import numpy as np
 import pandas as pd
+from timeseries.logger import Logger
+
+logger = Logger(__file__)
 
 class TimeseriesDataset:
     def __init__(self, config, device):
@@ -11,7 +14,8 @@ class TimeseriesDataset:
         self.config = config
         self.device = device
         # Dataset option
-        self.title = config["dataset"]["key"]
+        self.title = config["data"]
+        self.label = config["anomaly"] or None
         self.workers = config["workers"]
 
         self.stride = config["stride"]
@@ -21,25 +25,53 @@ class TimeseriesDataset:
         self.hidden_dim = config["hidden_dim"]
 
         # Dataset
-        data = self.load_data(config["dataset"])
+        data, label = self.load_data(config)
+
         self.n_feature = len(data.columns)
         self.time = self.store_times(data)
-        self.data = self.store_values(data)
+        self.data = self.store_values(data, normalize=True)
+        self.label = self.store_values(label, normalize=False)
+        
         self.data_len = len(self.data)
         
-        # data_np = self.data.numpy().reshape(self.data_len, -1)
-        # data_df = pd.DataFrame(data_np)
-        # data_df.to_csv(self.title)
 
     def load_data(self, config):
-        path = os.path.join(config["path"], config["key"])
+        path = os.path.join(config["path"], config["data"])
         data = pd.read_csv(path)
 
         INDEX_NOT_FOUND_ERR = f"Column `{config['index']}` is not found"
         assert config["index"] in data.columns, INDEX_NOT_FOUND_ERR
-        data = data.set_index(config["index"])
+        data[config["index"]] = pd.to_datetime(data[config["index"]])
+        label = self.load_anomaly(config, data)
 
-        return data
+        data = data.set_index(config["index"])
+        return data, label
+
+    def load_anomaly(self, config, data):
+        if self.label is None:
+            logger.info("Anomaly labels were not provided")
+            return None
+
+        path = os.path.join(config["path"], config["anomaly"])
+        if not os.path.exists(path):
+            logger.info(f"Anomaly file path is not corrected : {path}")
+            return None
+
+        with open(path) as f:
+            anomalies = json.load(f)["anomalies"]
+        
+        label = np.zeros(len(data))
+        for ano_span in anomalies:
+            ano_start = pd.to_datetime(ano_span[0])
+            ano_end = pd.to_datetime(ano_span[1])
+            for idx in data.index:
+                if data.loc[idx, config["index"]] >= ano_start and data.loc[idx, config["index"]] <= ano_end:
+                    label[idx] = 1.0
+        
+        label = pd.DataFrame({config["index"] : data[config["index"]], "value": label})
+        label = label.set_index(config["index"])
+        
+        return label
 
     def __len__(self):
         return self.data_len
@@ -49,16 +81,17 @@ class TimeseriesDataset:
 
     def store_times(self, data):
         time = pd.to_datetime(data.index)
-        time = time.strftime("%y%m%d_%H%M")
-        time = self.windowing(time)
+        time = time.strftime("%y%m%d:%H%M")
+        time = time.values
         return time
 
-    def store_values(self, data):
+    def store_values(self, data, normalize=False):
         data = self.windowing(data[["value"]])
-        data = self.normalize(data)
+        if normalize is True:
+            data = self.normalize(data)
         data = torch.from_numpy(data).float()
         return data
-
+    
     def windowing(self, x):
         stop = len(x) - self.seq_len
         return np.array([x[i : i + self.seq_len] for i in range(0, stop, self.stride)])

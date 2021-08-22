@@ -1,6 +1,20 @@
-import argparse
+import os
 import yaml
+import argparse
 
+def init_arguments():
+    """
+    Setting Input arguments option
+    """
+    args = Args()
+
+    CONFIG_FILE_IS_NOT_EXISTS = "Config File is not exists"
+    assert os.path.exists(args.config_path), CONFIG_FILE_IS_NOT_EXISTS
+
+    with open(args.config_path) as f:
+        config = yaml.safe_load(f)
+
+    return config
 
 class Args:
     def __init__(self):

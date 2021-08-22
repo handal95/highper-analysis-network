@@ -1,6 +1,7 @@
 import os
 import time
 import yaml
+import json
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,7 +9,7 @@ from torch.autograd import grad as torch_grad
 import numpy as np
 import pandas as pd
 
-from timeseries.args import Args
+from timeseries.args import init_arguments
 from timeseries.logger import Logger
 from timeseries.bandgan import BandGAN
 from timeseries.datasets import TimeseriesDataset
@@ -28,65 +29,60 @@ class BandGAN:
     Band GAN
     """
 
-    def __init__(self):
+    def __init__(self, config=None):
         # Config option
-        self.config = self.init_arguments()
+        self.device = self.init_device()
+        config = self.set_config(config=config)
 
         # Model option
-        self.load = self.config["load"]
-        self.save = self.config["save"]
-        self.save_path = self.config["save"]["path"]
-
-        self.device = self.init_device()
-        self.dataset = TimeseriesDataset(self.config, self.device)
+        self.dataset = TimeseriesDataset(config["dataset"], self.device)
         self.dataloader = self.init_dataloader(self.dataset)
         (self.netG, self.netD) = self.init_model(self.dataset)
 
-        self.lr = self.config["lr"]["base"]
-        self.lr_gammaD = self.config["lr"]["gammaD"]
-        self.lr_gammaG = self.config["lr"]["gammaG"]
-
-        self.iter_epochs = self.config["epochs"]["iter"]
-        self.base_epochs = self.config["epochs"]["base"]
-        self.iter_critic = self.config["epochs"]["critic"]
-
+        self.batch_size = self.dataset.batch_size
+        self.seq_len = self.dataset.seq_len
         self.in_dim = self.dataset.n_feature
-        self.cond = self.config["cond"]
-        self.seq_len = self.config["seq_len"]
 
-        self.batch_size = self.config["batch_size"]
-        self.losses = {
-            "G": [],
-            "D": [],
-            "GP": [],
-            "gradient_norm": [],
-            "l1": 0.0,
-            "l2": 0.0,
-        }
+        self.losses = {"G": [], "D": [], "l1": 0.0, "l2": 0.0, "GP": []}
+        self.visual = True if self.batch_size == 1 else False
 
-        self.gp_weight = self.config["grad_penalty"]["weight"]
-        self.print_verbose = self.config["print"]["verbose"]
-        self.print_newline = self.config["print"]["newline"]
-        self.visual = True if self.config["batch_size"] == 1 else False
+    def set_config(self, config=None):
+        config = init_arguments() if config is None else config
 
-    def init_arguments(self):
-        """
-        Setting Input arguments option
-        """
-        args = Args()
-
-        CONFIG_FILE_IS_NOT_EXISTS = "Config File is not exists"
-        assert os.path.exists(args.config_path), CONFIG_FILE_IS_NOT_EXISTS
-
-        with open(args.config_path) as f:
-            config = yaml.safe_load(f)
-
+        # Sub config
+        model_cfg = config["model"]
+        train_cfg = config["train"]
+        print_cfg = config["print"]
+        
+        # Model option
+        self.save = model_cfg["save"]
+        self.load = model_cfg["load"]
+        self.model_tag = model_cfg["tag"]
+        self.model_path = model_cfg["path"]
+        self.model_interval = model_cfg["interval"]
+        
+        # Train option
+        self.lr = train_cfg["learning_rate"]["base"]
+        self.lr_gammaG = train_cfg["learning_rate"]["gammaG"]
+        self.lr_gammaD = train_cfg["learning_rate"]["gammaD"]
+        
+        self.epochs = train_cfg["epochs"]["iter"]
+        self.base_epochs = train_cfg["epochs"]["base"]
+        self.iter_epochs = train_cfg["epochs"]["iter"]
+        self.iter_critic = train_cfg["epochs"]["critic"]
+        
+        self.gp_weight = train_cfg["wgan"]["gp_weight"]
+        self.cond = train_cfg["wgan"]["cond"]
+        
+        # Print option
+        self.print_verbose = print_cfg["verbose"]
+        self.print_newline = print_cfg["newline"]
+        
         return config
 
     def init_device(self):
         """
         Setting device option
-        TODO : Multi GPU option
         """
 
         device = torch.device("cpu")
@@ -111,17 +107,17 @@ class BandGAN:
         in_dim = dataset.n_feature
         device = self.device
 
-        if self.load["opt"] is True:
+        if self.load is True:
             logger.info("Loading Pretrained Models..")
-            netG_path = os.path.join(self.load["path"], f"netG_{self.load['base']}.pth")
-            netD_path = os.path.join(self.load["path"], f"netD_{self.load['base']}.pth")
+            netG_path = os.path.join(self.model_path, f"netG_{self.model_tag}.pth")
+            netD_path = os.path.join(self.model_path, f"netD_{self.model_tag}.pth")
             if os.path.exists(netG_path) and os.path.exists(netD_path):
                 logger.info(f" - Loaded net D : {netD_path}, net G: {netG_path}")
-                netG = torch.load(netG_path)
-                netD = torch.load(netD_path)
-                return netG, netD
+                return torch.load(netG_path), torch.load(netD_path)
             else:
-                logger.info("Loading Pretrained Models is Fail, file is not exists")
+                logger.info(
+                    f"Loading Pretrained Models is Fail, file('{netG_path}', '{netD_path}') is not exists"
+                )
 
         netG = LSTMGenerator(in_dim, out_dim=in_dim, hidden_dim=hidden_dim, device=device).to(device)
         netD = LSTMDiscriminator(in_dim, hidden_dim=hidden_dim, device=device).to(device)
@@ -139,11 +135,10 @@ class BandGAN:
         criterion_l1n = nn.SmoothL1Loss().to(device)
         criterion_l2n = nn.MSELoss().to(device)
 
-    
-        # df = pd.DataFrame(np.zeros())
         runtime = 0
-        dashboard = Dashboard(self.dataset)
         samples = None
+        data_samples = None
+        dashboard = Dashboard(self.dataset)
         for epoch in range(self.base_epochs, self.iter_epochs):
             start_time = time.time()
             for i in range(self.iter_critic):
@@ -224,8 +219,8 @@ class BandGAN:
                 gradients_penalty = torch.square(1 - gradients_l2_norm)
                 gradients_penalty = gradients_penalty / shape[0]
 
-                errl1 = criterion_l1n(y, x) * 1000.0
-                errl2 = criterion_l2n(y, x) * 1000.0
+                errl1 = criterion_l1n(y, x) * 10.0
+                errl2 = criterion_l2n(y, x) * 10.0
                 errG = errG_ + errl1 + errl2 + gradients_penalty
                 errG.backward()
 
@@ -236,16 +231,6 @@ class BandGAN:
                 running_loss["l2"] += errl2
                 running_loss["GP"] += gradients_penalty
                 
-                # y = self.netG(torch.randn(shape).to(device))
-                # sample_Dy = self.dataset.denormalize(y.cpu()).cpu()
-                # sample_Dy = sample_Dy.detach().numpy().reshape(-1, self.seq_len)
-                # sample_Dy = pd.DataFrame(sample_Dy)
-
-                # if samples is None:
-                #     samples = sample_Dy
-                # else:
-                #     samples = samples.append(sample_Dy)
-                # samples.to_csv("sample2.csv")
                 print(
                     f"[{i + 1:4d}/{len(self.dataloader):4d}] ", end='\r')
 
@@ -264,6 +249,17 @@ class BandGAN:
 
                 if self.visual is True:
                     y1 = self.netG(torch.randn(shape).to(device))
+                    y_ = pd.DataFrame(y1[0].T.cpu().detach().numpy())
+                    x_ = pd.DataFrame(x[0].T.cpu().detach().numpy())
+                    if samples is None:
+                        samples = y_
+                        data_samples = x_
+                    else:
+                        data_samples = data_samples.append(self.dataset.denormalize(x_))
+                        samples = samples.append(self.dataset.denormalize(y_))
+                        data_samples.to_csv("x.csv")
+                        samples.to_csv("y.csv")
+                        
                     dashboard._visualize(
                         self.dataset.time[i],
                         self.dataset.denormalize(x.cpu()),
@@ -320,5 +316,8 @@ class BandGAN:
 
 if __name__ == "__main__":
     # Argument options
-    model = BandGAN()
+    with open("config/config.json") as f:
+        config = json.load(f)
+
+    model = BandGAN(config=config)
     model.run()
