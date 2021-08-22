@@ -1,4 +1,5 @@
 import os
+from numpy.core.numeric import NaN
 import yaml
 import json
 import torch
@@ -11,21 +12,12 @@ logger = Logger(__file__)
 class TimeseriesDataset:
     def __init__(self, config, device):
         # Load Data
-        self.config = config
+        logger.info("Loading Dataset")
         self.device = device
-        # Dataset option
-        self.title = config["data"]
-        self.label = config["anomaly"] or None
-        self.workers = config["workers"]
-
-        self.stride = config["stride"]
-        self.seq_len = config["seq_len"]
-        self.shuffle = config["shuffle"]
-        self.batch_size = config["batch_size"]
-        self.hidden_dim = config["hidden_dim"]
+        self.init_config(config)
 
         # Dataset
-        data, label = self.load_data(config)
+        data, label = self.load_data()
 
         self.n_feature = len(data.columns)
         self.time = self.store_times(data)
@@ -34,30 +26,73 @@ class TimeseriesDataset:
         
         self.data_len = len(self.data)
         
+    def init_config(self, config):
+        self.title = config["data"]
+        self.label = config["anomaly"]
+        self.workers = config["workers"]
+        self.index = config["index"]
 
-    def load_data(self, config):
-        path = os.path.join(config["path"], config["data"])
-        data = pd.read_csv(path)
+        self.stride = config["stride"]
+        self.seq_len = config["seq_len"]
+        self.shuffle = config["shuffle"]
+        self.batch_size = config["batch_size"]
+        self.hidden_dim = config["hidden_dim"]
+        
+        self.data_path = os.path.join(config["path"], config["data"])
+        self.anomaly_path = os.path.join(config["path"], config["anomaly"])
+        
+        
+    def load_data(self):
+        data = pd.read_csv(self.data_path)
+        data, label = self.fill_timegap(data)
 
-        INDEX_NOT_FOUND_ERR = f"Column `{config['index']}` is not found"
-        assert config["index"] in data.columns, INDEX_NOT_FOUND_ERR
-        data[config["index"]] = pd.to_datetime(data[config["index"]])
-        label = self.load_anomaly(config, data)
+        label = self.load_anomaly(data)
+        data = data.set_index(self.index)
 
-        data = data.set_index(config["index"])
+        return data, label
+    
+    def fill_timegap(self, data):
+        # TODO : Need Refactoring 
+        data[self.index] = pd.to_datetime(data[self.index])
+        timegap = data[self.index][1] - data[self.index][0]
+        label = pd.DataFrame()
+
+        length = len(data)
+        with open(self.anomaly_path, mode="r") as f:
+            json_data = json.load(f)
+
+        json_data["missing"] = list()
+        for i in range(1, len(data)):
+            if data[self.index][i] - data[self.index][i - 1] != timegap:
+                start_time = data[self.index][i - 1] + timegap
+                end_time = data[self.index][i] - timegap
+                json_data["missing"].append([str(start_time), str(end_time)])
+                
+                # Fill time gap
+                for _ in range(1 + (end_time - start_time) // timegap):
+                    time = start_time + _ * timegap
+                    data = data.append({self.index: time}, ignore_index=True)
+                    
+        data = data.set_index(self.index).sort_index().reset_index()
+
+        with open(self.anomaly_path, mode="w") as f:
+            json.dump(json_data, f)
+
+        filled_length = len(data) - length
+        logger.info(f"Filling Time Gap : Filled records : {filled_length} : timegap : {timegap}")
+                
         return data, label
 
-    def load_anomaly(self, config, data):
+    def load_anomaly(self, data):
         if self.label is None:
             logger.info("Anomaly labels were not provided")
             return None
 
-        path = os.path.join(config["path"], config["anomaly"])
-        if not os.path.exists(path):
-            logger.info(f"Anomaly file path is not corrected : {path}")
+        if not os.path.exists(self.anomaly_path):
+            logger.info(f"Anomaly file path is not corrected : {self.anomaly_path}")
             return None
 
-        with open(path) as f:
+        with open(self.anomaly_path) as f:
             anomalies = json.load(f)["anomalies"]
         
         label = np.zeros(len(data))
@@ -65,11 +100,11 @@ class TimeseriesDataset:
             ano_start = pd.to_datetime(ano_span[0])
             ano_end = pd.to_datetime(ano_span[1])
             for idx in data.index:
-                if data.loc[idx, config["index"]] >= ano_start and data.loc[idx, config["index"]] <= ano_end:
+                if data.loc[idx, self.index] >= ano_start and data.loc[idx, self.index] <= ano_end:
                     label[idx] = 1.0
         
-        label = pd.DataFrame({config["index"] : data[config["index"]], "value": label})
-        label = label.set_index(config["index"])
+        label = pd.DataFrame({self.index : data[self.index], "value": label})
+        label = label.set_index(self.index)
         
         return label
 
