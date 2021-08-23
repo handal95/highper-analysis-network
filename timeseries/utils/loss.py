@@ -4,10 +4,10 @@ import torch.nn.functional as F
 
 
 class GANLoss(nn.Module):
-    def __init__(self, target_real_label=0.9, target_fake_label=0.1):
+    def __init__(self, real_label=0.9, fake_label=0.1):
         super(GANLoss, self).__init__()
-        self.register_buffer("real_label", torch.tensor(target_real_label))
-        self.register_buffer("fake_label", torch.tensor(target_fake_label))
+        self.register_buffer("real_label", torch.tensor(real_label))
+        self.register_buffer("fake_label", torch.tensor(fake_label))
         self.loss = nn.MSELoss()
 
     def get_target_tensor(self, input, target_is_real):

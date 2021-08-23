@@ -37,17 +37,22 @@ class BandGAN:
         # Model option
         self.dataset = TimeseriesDataset(config["dataset"], self.device)
         self.dataloader = self.init_dataloader(self.dataset)
-        (self.netG, self.netD) = self.init_model(self.dataset)
+        (self.netG, self.netD) = self.init_model()
 
         self.batch_size = self.dataset.batch_size
         self.seq_len = self.dataset.seq_len
         self.in_dim = self.dataset.n_feature
+        self.shape = (self.batch_size, self.seq_len, self.in_dim)
 
         self.losses = {"G": [], "D": [], "l1": 0.0, "l2": 0.0, "GP": []}
         self.visual = True if self.batch_size == 1 else False
 
     def set_config(self, config=None):
-        config = init_arguments() if config is None else config
+        if config is None:
+            logger.info("JSON configuration is None, Use Default Config Settings")
+            config = init_arguments()
+        else:
+            logger.info("Loaded JSON configuration")
 
         # Sub config
         model_cfg = config["model"]
@@ -102,73 +107,80 @@ class BandGAN:
         )
         return dataloader
 
-    def init_model(self, dataset):
-        hidden_dim = dataset.hidden_dim
-        in_dim = dataset.n_feature
-        device = self.device
+    def init_model(self):
+        netG, netD = self.load_model(self.load)
 
-        if self.load is True:
+        # Set Oprimizer
+        self.optimizerD = optim.RMSprop(netD.parameters(), lr=self.lr * self.lr_gammaD)
+        self.optimizerG = optim.RMSprop(netG.parameters(), lr=self.lr * self.lr_gammaG)
+
+        # Set Criterion
+        self.criterion_adv = GANLoss(real_label=0.9, fake_label=0.1).to(self.device)
+        self.criterion_l1n = nn.SmoothL1Loss().to(self.device)
+        self.criterion_l2n = nn.MSELoss().to(self.device)
+                
+        return (netG, netD)
+
+    def load_model(self, load_option=False):
+        hidden_dim = self.dataset.hidden_dim
+        in_dim = self.dataset.n_feature
+        device = self.device
+        
+        if load_option is True:
             logger.info("Loading Pretrained Models..")
             netG_path = os.path.join(self.model_path, f"netG_{self.model_tag}.pth")
             netD_path = os.path.join(self.model_path, f"netD_{self.model_tag}.pth")
             if os.path.exists(netG_path) and os.path.exists(netD_path):
                 logger.info(f" - Loaded net D : {netD_path}, net G: {netG_path}")
-                return torch.load(netG_path), torch.load(netD_path)
+                return (torch.load(netG_path), torch.load(netD_path))
             else:
-                logger.info(
-                    f"Loading Pretrained Models is Fail, file('{netG_path}', '{netD_path}') is not exists"
-                )
+                logger.info(f"Pretrained Model File ('{netG_path}', '{netD_path}') is not found")
 
         netG = LSTMGenerator(in_dim, out_dim=in_dim, hidden_dim=hidden_dim, device=device).to(device)
         netD = LSTMDiscriminator(in_dim, hidden_dim=hidden_dim, device=device).to(device)
-        return (netG, netD)
-
-    def run(self):
-        logger.info("RUN the model")
+        return (netG, netD)       
+        
+        
+    def train(self):
+        logger.info("Train the model")
 
         device = self.device
-        shape = (self.batch_size, self.seq_len, self.in_dim)
-
-        optimizerD = optim.RMSprop(self.netD.parameters(), lr=self.lr * self.lr_gammaD)
-        optimizerG = optim.RMSprop(self.netG.parameters(), lr=self.lr * self.lr_gammaG)
-        criterion_adv = GANLoss(target_real_label=0.9, target_fake_label=0.1).to(device)
-        criterion_l1n = nn.SmoothL1Loss().to(device)
-        criterion_l2n = nn.MSELoss().to(device)
 
         runtime = 0
         samples = None
         data_samples = None
         dashboard = Dashboard(self.dataset)
+
         for epoch in range(self.base_epochs, self.iter_epochs):
             start_time = time.time()
             for i in range(self.iter_critic):
-                y, x = self.dataset.get_samples(self.netG, shape=shape, cond=self.cond)
+                y, x = self.dataset.get_samples(self.netG, shape=self.shape, cond=self.cond)
                 
                 Dx = self.netD(x)
                 DGz = self.netD(y)
-                optimizerD.zero_grad()
+                self.optimizerD.zero_grad()
                 
                 with torch.backends.cudnn.flags(enabled=False):
                     grad_penalty = self._grad_penalty(x, y)
                 loss_D = DGz.mean() - Dx.mean() + grad_penalty
                 loss_D.backward()
-                optimizerD.step()
+                self.optimizerD.step()
 
                 if i == self.iter_critic - 1:
                     self.losses["D"].append(loss_D)
                     self.losses["GP"].append(grad_penalty)
 
-            optimizerG.zero_grad()
-            y, x = self.dataset.get_samples(self.netG, shape=shape, cond=self.cond)
+            self.optimizerG.zero_grad()
+            y, x = self.dataset.get_samples(self.netG, shape=self.shape, cond=self.cond)
             Dy = self.netD(y)
             
-            errl1 = criterion_l1n(y, x)
-            errl2 = criterion_l2n(y, x)
+            errl1 = self.criterion_l1n(y, x)
+            errl2 = self.criterion_l2n(y, x)
 
             loss_G = -Dy.mean()
             loss_G.backward()
 
-            optimizerG.step()
+            self.optimizerG.step()
             self.losses["G"].append(loss_G)
             self.losses["l1"] = errl1
             self.losses["l2"] = errl2
@@ -188,29 +200,29 @@ class BandGAN:
 
             running_loss = {"D": 0, "G": 0, "Dx": 0, "l1": 0, "l2": 0, "GP": 0}
             for i, data in enumerate(self.dataloader, 0):
-                optimizerD.zero_grad()
-                optimizerG.zero_grad()
+                self.optimizerD.zero_grad()
+                self.optimizerG.zero_grad()
 
                 x = data.to(self.device)
                 shape = (x.size(0), x.size(1), self.in_dim)
                 
                 Dx = self.netD(x)
-                errD_real = criterion_adv(Dx, target_is_real=True)
+                errD_real = self.criterion_adv(Dx, target_is_real=True)
                 errD_real.backward()
 
                 # Train with Fake Data z
                 y = self.netG(torch.randn(shape).to(device))
                 DGz1 = self.netD(y)
 
-                errD_fake = criterion_adv(DGz1, target_is_real=False)
+                errD_fake = self.criterion_adv(DGz1, target_is_real=False)
                 errD_fake.backward()
                 errD = errD_real + errD_fake
-                optimizerD.step() 
+                self.optimizerD.step() 
 
                 y = self.netG(torch.randn(shape).to(device))
                 Dy = self.netD(y)
 
-                errG_ = criterion_adv(Dy, target_is_real=False)
+                errG_ = self.criterion_adv(Dy, target_is_real=False)
 
                 gradients = y - x
                 gradients_sqr = torch.square(gradients)
@@ -219,12 +231,12 @@ class BandGAN:
                 gradients_penalty = torch.square(1 - gradients_l2_norm)
                 gradients_penalty = gradients_penalty / shape[0]
 
-                errl1 = criterion_l1n(y, x) * 10.0
-                errl2 = criterion_l2n(y, x) * 10.0
+                errl1 = self.criterion_l1n(y, x) * 10.0
+                errl2 = self.criterion_l2n(y, x) * 10.0
                 errG = errG_ + errl1 + errl2 + gradients_penalty
                 errG.backward()
 
-                optimizerG.step()
+                self.optimizerG.step()
                 running_loss["D"] += errD
                 running_loss["G"] += errG_
                 running_loss["l1"] += errl1
@@ -314,10 +326,18 @@ class BandGAN:
         runtime = f"{time:4.2f} / {done_time:4.2f} sec "
         return runtime
 
+    def interpolate(self):
+        pass
+    
+    def evaluate(self):
+        pass
+        
+
 if __name__ == "__main__":
     # Argument options
     with open("config/config.json") as f:
         config = json.load(f)
 
     model = BandGAN(config=config)
-    model.run()
+    model.evaluate()
+    model.train()
